@@ -1,0 +1,20 @@
+{
+  "name": "metaverse-cathedral",
+  "version": "1.0.0",
+  "description": "실시간 메타버스 성당: 미사 순서 진행 + 고해 준비",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node tests/e2e.cjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.22.3",
+    "three": "^0.160.0",
+    "ws": "^8.22.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true
+}

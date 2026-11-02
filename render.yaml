@@ -1,0 +1,17 @@
+# Render Blueprint: 대시보드 New → Blueprint 에서 이 저장소를 선택하면 자동 생성됩니다.
+services:
+  - type: web
+    name: metaverse-cathedral
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # 진행자 키: Render가 임의 값을 생성 → 대시보드 Environment 탭에서 확인
+      - key: MASS_HOST_KEY
+        generateValue: true

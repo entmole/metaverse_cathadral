@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>메타버스 성당</title>
+  <meta name="description" content="여러 신자가 함께 3D 성당에서 미사 순서를 따라 기도하고 고해를 준비하는 공간" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app" aria-hidden="true"></div>
+  <div id="crosshair" aria-hidden="true"></div>
+
+  <!-- ───── 입장 화면 ───── -->
+  <section id="join" class="overlay">
+    <div class="card join-card">
+      <div class="cross" aria-hidden="true">✝</div>
+      <h1>메타버스 성당</h1>
+      <p class="lead">함께 미사 순서를 따라 기도하고, 조용히 고해를 준비하는 공간입니다.</p>
+      <form id="join-form" autocomplete="off">
+        <label for="nick">이름(세례명)</label>
+        <input id="nick" maxlength="16" placeholder="예: 요셉" required />
+        <button type="submit" class="btn primary">성당에 들어가기</button>
+      </form>
+      <ul class="keys">
+        <li><kbd>W A S D</kbd> 이동 · <kbd>마우스</kbd> 둘러보기</li>
+        <li><kbd>E</kbd> 신자석 앉기 / 고해소 들어가기</li>
+        <li><kbd>Enter</kbd> 채팅 · <kbd>Esc</kbd> 마우스 해제</li>
+      </ul>
+      <p class="fineprint">온라인 참여는 주일·대축일 미사 참례 의무를 대체하지 않으며, 이곳의 고해 공간은 성사가 아닌 <b>준비</b>를 돕습니다.</p>
+      <p id="join-error" class="error" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- ───── HUD ───── -->
+  <div id="hud" hidden>
+    <header id="topbar">
+      <div class="presence"><span class="dot"></span><span id="count">0</span>명<span class="lbl"> 함께 기도 중</span></div>
+      <div class="actions">
+        <button id="btn-sound" class="btn ghost sm" aria-pressed="true" aria-label="소리"><span class="ico">🔔</span><span class="lbl"> 소리 켬</span></button>
+        <button id="btn-follow" class="btn ghost sm" aria-pressed="true" aria-label="미사 자세 자동 따라하기"><span class="ico">🧍</span><span class="lbl"> 자세 따라하기 켬</span></button>
+        <button id="btn-host" class="btn ghost sm">진행자</button>
+      </div>
+    </header>
+
+    <section id="mass-panel" aria-live="polite">
+      <div class="mass-head">
+        <span id="mass-part" class="chip">미사 전</span>
+        <span id="mass-mode" class="mode"></span>
+      </div>
+      <h2 id="mass-title">미사를 기다리는 중</h2>
+      <p id="mass-desc">진행자가 미사를 시작하거나, 아래 버튼으로 자동 진행 미사를 시작할 수 있습니다.</p>
+      <div id="mass-posture" class="posture"></div>
+      <div id="mass-responses" class="responses"></div>
+      <div class="progress"><div id="mass-progress"></div></div>
+      <div id="mass-timer" class="timer"></div>
+      <button id="btn-start-auto" class="btn primary sm">자동 진행 미사 시작</button>
+      <div id="host-controls" hidden>
+        <button data-act="prev" class="btn sm">◀ 이전</button>
+        <button data-act="next" class="btn primary sm">다음 ▶</button>
+        <button data-act="silence" class="btn sm" id="btn-silence">침묵 모드</button>
+        <button data-act="reset" class="btn danger sm">종료</button>
+      </div>
+      <button id="mass-collapse" class="collapse" aria-label="미사 안내 접기">▾</button>
+    </section>
+
+    <section id="chat">
+      <ol id="chat-log" aria-live="polite"></ol>
+      <form id="chat-form" autocomplete="off">
+        <input id="chat-input" maxlength="200" placeholder="Enter로 채팅 (최대 200자)" />
+      </form>
+    </section>
+
+    <div id="prompt" class="prompt" hidden></div>
+    <div id="joystick" aria-hidden="true"><div class="knob"></div></div>
+    <button id="btn-interact" class="btn primary round" hidden>E</button>
+  </div>
+
+  <!-- ───── 진행자 키 입력 ───── -->
+  <dialog id="host-dialog">
+    <form method="dialog" id="host-form">
+      <h3>진행자 권한</h3>
+      <p>서버 실행 시 설정한 진행자 키를 입력하십시오.</p>
+      <input id="host-key" type="password" autocomplete="off" />
+      <menu>
+        <button value="cancel" class="btn ghost">취소</button>
+        <button value="ok" class="btn primary">확인</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- ───── 고해 준비 ───── -->
+  <section id="confession" class="overlay" hidden aria-modal="true" role="dialog" aria-labelledby="conf-title">
+    <div class="card conf-card">
+      <header class="conf-head">
+        <h2 id="conf-title">고해 준비</h2>
+        <ol class="steps" id="conf-steps">
+          <li data-step="0">기도</li><li data-step="1">성찰</li><li data-step="2">통회</li><li data-step="3">고해 안내</li>
+        </ol>
+        <button id="conf-close" class="btn ghost sm">나가기 ✕</button>
+      </header>
+      <p id="conf-notice" class="notice"></p>
+      <div id="conf-body"></div>
+      <footer class="conf-foot">
+        <button id="conf-prev" class="btn ghost">이전</button>
+        <button id="conf-next" class="btn primary">다음</button>
+      </footer>
+    </div>
+  </section>
+
+  <div id="toast" role="status"></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
