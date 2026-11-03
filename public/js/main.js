@@ -8,7 +8,14 @@ import { MassUI } from './ui/mass.js';
 import { ChatUI } from './ui/chat.js';
 import { ConfessionUI } from './ui/confession.js';
 import { initAudio, bell, setSound, isSoundOn } from './audio.js';
+import { HelpUI } from './ui/help.js';
 import { $, toast } from './ui/dom.js';
+
+// ───────── 터치 기기 판별 ─────────
+// 터치 위주 기기면 시작부터 조이스틱 UI, 이후 실제 입력 종류(터치/마우스)에 따라 자동 전환
+const setTouchMode = (on) => document.body.classList.toggle('touch', on);
+setTouchMode(matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches));
+addEventListener('pointerdown', (e) => setTouchMode(e.pointerType !== 'mouse'), { capture: true });
 
 const INTERACT_DIST = 1.8;
 const SEND_HZ = 12;
@@ -32,7 +39,8 @@ const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 1
 const world = buildCathedral(scene);
 const avatars = new AvatarManager(scene);
 const controls = new PlayerControls(camera, renderer.domElement, world.colliders);
-controls.attachJoystick($('#joystick'));
+controls.attachMoveStick($('#stick-move'));
+controls.attachLookStick($('#stick-look'));
 controls.enabled = false;
 
 addEventListener('resize', () => {
@@ -115,12 +123,12 @@ function setCount(n) { $('#count').textContent = n; }
 // ───────── 상호작용(E키) ─────────
 function nearestInteraction() {
   const p = controls.pos;
-  if (controls.seat) return { type: 'leave', label: 'E 또는 이동키: 일어나 나가기' };
+  if (controls.seat) return { type: 'leave', btn: '🧍 일어서기', label: 'E 또는 이동키: 일어나 나가기' };
   for (const b of world.booths) {
     if (Math.hypot(p.x - b.entry.x, p.z - b.entry.z) < INTERACT_DIST) {
       return booths[b.id]
         ? { type: 'busy', label: '🔴 고해소 사용 중 — 잠시 기다려 주십시오' }
-        : { type: 'booth', id: b.id, label: 'E: 고해소에 들어가 고해 준비하기' };
+        : { type: 'booth', id: b.id, btn: '✝ 고해 준비', label: 'E: 고해소에 들어가 고해 준비하기' };
     }
   }
   let best = null, bd = 1.6;
@@ -128,7 +136,7 @@ function nearestInteraction() {
     const d = Math.hypot(p.x - s.x, p.z - s.z);
     if (d < bd) { bd = d; best = s; }
   }
-  return best ? { type: 'seat', seat: best, label: 'E: 신자석에 앉기' } : null;
+  return best ? { type: 'seat', seat: best, btn: '🪑 앉기', label: 'E: 신자석에 앉기' } : null;
 }
 
 controls.onInteract = () => {
@@ -143,6 +151,21 @@ controls.onInteract = () => {
   }
 };
 $('#btn-interact').addEventListener('click', () => controls.onInteract());
+
+// 모바일 채팅: 💬 버튼으로 입력창 열기/닫기
+const chatInput = $('#chat-input');
+$('#btn-chat').addEventListener('click', () => {
+  const open = !document.body.classList.contains('chat-open');
+  document.body.classList.toggle('chat-open', open);
+  if (open) chatInput.focus(); else chatInput.blur();
+});
+chatInput.addEventListener('blur', () => setTimeout(() => {
+  if (document.activeElement !== chatInput) document.body.classList.remove('chat-open');
+}, 150));
+
+// 조작 안내
+const help = new HelpUI();
+$('#btn-help').addEventListener('click', () => help.open());
 
 // ───────── 상단 버튼 ─────────
 $('#btn-sound').addEventListener('click', (e) => {
@@ -181,6 +204,9 @@ $('#join-form').addEventListener('submit', (e) => {
   $('#hud').hidden = false;
   controls.enabled = true;
   controls.pos.set((Math.random() - 0.5) * 2, 0, 27);
+  // 스마트폰은 화면 확보를 위해 미사 안내를 접은 상태로 시작
+  if (document.body.classList.contains('touch')) $('#mass-panel').classList.add('collapsed');
+  help.openFirstTime();
 });
 
 // ───────── 루프 ─────────
@@ -189,6 +215,7 @@ let sendAcc = 0;
 let lastSent = '';
 const promptEl = $('#prompt');
 const interactBtn = $('#btn-interact');
+let lastBtnText = '';
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
@@ -200,9 +227,13 @@ renderer.setAnimationLoop(() => {
   // 상호작용 안내
   if (controls.enabled) {
     const it = nearestInteraction();
-    promptEl.hidden = !it;
+    const touch = document.body.classList.contains('touch');
+    // 터치 모드에서는 상황 버튼이 안내를 대신하고, '사용 중' 안내만 화면에 표시
+    promptEl.hidden = !it || (touch && it.type !== 'busy');
     interactBtn.hidden = !it || it.type === 'busy';
     if (it) promptEl.textContent = it.label;
+    const text = it?.btn || '';
+    if (text !== lastBtnText) { interactBtn.textContent = text; lastBtnText = text; }
   } else {
     promptEl.hidden = true;
     interactBtn.hidden = true;
@@ -220,4 +251,4 @@ renderer.setAnimationLoop(() => {
 });
 
 // 테스트·디버깅용 최소 노출(개인 메모는 포함하지 않음)
-window.__cathedral = { controls, world, avatars, massUI, net };
+window.__cathedral = { controls, world, avatars, massUI, net, help };

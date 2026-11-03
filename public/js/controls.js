@@ -1,9 +1,10 @@
-// 1인칭 이동·시점 조작(데스크톱: 포인터락+WASD / 모바일: 조이스틱+드래그)
+// 1인칭 이동·시점 조작(데스크톱: 포인터락+WASD / 모바일: 듀얼 조이스틱+드래그)
 import * as THREE from 'three';
 
 const EYE = { stand: 1.62, sit: 1.12, kneel: 0.98 };
 const SPEED = 3.2;      // m/s
 const RADIUS = 0.3;     // 충돌 반경
+const LOOK_SPEED = { yaw: 2.4, pitch: 1.6 }; // 시점 스틱 최대 회전 속도(rad/s)
 const WORLD = { minX: -11.6, maxX: 11.6, minZ: -27.6, maxZ: 29.6 };
 
 export class PlayerControls {
@@ -23,7 +24,8 @@ export class PlayerControls {
     this.seat = null;         // 앉은 좌석 {x,z}
     this.enabled = true;
     this.keys = new Set();
-    this.joy = { x: 0, y: 0 };
+    this.joy = { x: 0, y: 0 };      // 이동 스틱 (-1~1)
+    this.lookJoy = { x: 0, y: 0 };  // 시점 스틱 (-1~1)
     this.eye = EYE.stand;
     this.onInteract = null;   // E키 콜백
     this.onLeaveSeat = null;
@@ -46,7 +48,7 @@ export class PlayerControls {
 
     // 데스크톱: 클릭 시 포인터락
     this.dom.addEventListener('click', () => {
-      if (this.enabled && matchMedia('(pointer: fine)').matches && !this.isLocked) this.dom.requestPointerLock?.();
+      if (this.enabled && !document.body.classList.contains('touch') && matchMedia('(pointer: fine)').matches && !this.isLocked) this.dom.requestPointerLock?.();
     });
     document.addEventListener('pointerlockchange', () => document.body.classList.toggle('locked', this.isLocked));
     document.addEventListener('mousemove', (e) => {
@@ -67,26 +69,59 @@ export class PlayerControls {
     this.dom.addEventListener('pointercancel', end);
   }
 
-  /** 가상 조이스틱 연결 */
-  attachJoystick(el) {
+  /**
+   * 범용 가상 조이스틱. 스틱마다 pointerId를 따로 잡아 양손 동시 조작을 지원한다.
+   * @param {HTMLElement} el `.knob` 자식을 가진 원형 영역
+   * @param {(v:{x:number,y:number}) => void} onChange 데드존 보정된 -1~1 벡터
+   */
+  #stick(el, onChange) {
     const knob = el.querySelector('.knob');
+    const DEAD = 0.15;
     let id = null;
-    const R = 46;
     const set = (e) => {
       const r = el.getBoundingClientRect();
+      const R = r.width * 0.38; // 손잡이 최대 이동 반경
       let dx = e.clientX - (r.left + r.width / 2);
       let dy = e.clientY - (r.top + r.height / 2);
       const len = Math.hypot(dx, dy);
       if (len > R) { dx *= R / len; dy *= R / len; }
       knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      this.joy = { x: dx / R, y: dy / R };
-      if (this.seat && Math.hypot(this.joy.x, this.joy.y) > 0.5) this.leaveSeat();
+      const m = Math.min(1, len / R);
+      // 데드존 이하 무시, 그 이상은 0~1로 재스케일
+      const k = m < DEAD ? 0 : (m - DEAD) / (1 - DEAD) / (m || 1);
+      onChange({ x: (dx / R) * k, y: (dy / R) * k });
     };
-    el.addEventListener('pointerdown', (e) => { id = e.pointerId; el.setPointerCapture(id); set(e); });
+    const reset = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      knob.style.transform = '';
+      el.classList.remove('active');
+      onChange({ x: 0, y: 0 });
+    };
+    el.addEventListener('pointerdown', (e) => {
+      if (id !== null) return;
+      e.preventDefault();
+      id = e.pointerId;
+      try { el.setPointerCapture(id); } catch { /* 캡처 미지원 환경: 이벤트는 그대로 처리 */ }
+      el.classList.add('active');
+      set(e);
+    });
     el.addEventListener('pointermove', (e) => { if (e.pointerId === id) set(e); });
-    const reset = () => { id = null; this.joy = { x: 0, y: 0 }; knob.style.transform = ''; };
     el.addEventListener('pointerup', reset);
     el.addEventListener('pointercancel', reset);
+  }
+
+  /** 왼쪽 스틱: 이동 (앉아 있을 때 밀면 일어남) */
+  attachMoveStick(el) {
+    this.#stick(el, (v) => {
+      this.joy = v;
+      if (this.seat && Math.hypot(v.x, v.y) > 0.5) this.leaveSeat();
+    });
+  }
+
+  /** 오른쪽 스틱: 시점 회전 (update에서 연속 회전) */
+  attachLookStick(el) {
+    this.#stick(el, (v) => { this.lookJoy = v; });
   }
 
   #look(dx, dy, s) {
@@ -124,6 +159,12 @@ export class PlayerControls {
   }
 
   update(dt) {
+    const L = this.lookJoy;
+    if (this.enabled && (L.x || L.y)) {
+      const curve = (v) => Math.sign(v) * v * v;
+      this.yaw -= curve(L.x) * LOOK_SPEED.yaw * dt;
+      this.pitch = THREE.MathUtils.clamp(this.pitch - curve(L.y) * LOOK_SPEED.pitch * dt, -1.3, 1.3);
+    }
     if (this.enabled && !this.seat) {
       let f = 0, s = 0;
       const K = this.keys;

@@ -32,9 +32,12 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
       page.on('pageerror', (e) => errors.push(e.message));
       page.on('websocket', (ws) => ws.on('framesent', (f) => sent.push(String(f.payload))));
       await page.goto(URL);
+      await page.waitForSelector('#nick', { timeout: 60000 });
       await page.fill('#nick', name);
       await page.click('#join-form button');
       await page.waitForFunction(() => window.__cathedral?.massUI.state);
+      // 첫 입장 조작 안내 창 닫기
+      await page.click('#help-dialog .help-foot button');
       return { page, sent, errors };
     };
 
@@ -106,7 +109,71 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     check('A 퇴장 후 B 입장 가능', true);
     await B.page.click('#conf-close');
 
-    console.log('7) 퇴장 처리');
+    console.log('7) 스마트폰 조이스틱·조작 안내');
+    const mctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const M = await mctx.newPage();
+    const mErrors = [];
+    M.on('pageerror', (e) => mErrors.push(e.message));
+    await M.goto(URL);
+    check('입장 화면에 스마트폰 조작 안내 표시', await M.isVisible('.keys.only-touch') && await M.isHidden('.keys.only-desktop'));
+    await M.fill('#nick', '모니카');
+    await M.tap('#join-form button');
+    await M.waitForFunction(() => window.__cathedral?.massUI.state);
+    check('첫 입장 시 조작 안내 자동 표시(스마트폰 탭)', await M.isVisible('#help-dialog [data-panel=touch]') && await M.isHidden('#help-dialog [data-panel=desktop]'));
+    await M.tap('#help-dialog .help-foot button');
+    check('두 조이스틱 표시', await M.isVisible('#stick-move') && await M.isVisible('#stick-look'));
+    check('모바일은 미사 안내가 접힌 상태로 시작', await M.evaluate(() => document.querySelector('#mass-panel').classList.contains('collapsed')));
+
+    // 스틱을 손가락으로 민 상태를 PointerEvent로 재현
+    const drag = (sel, dx, dy, ms) => M.evaluate(async ([sel, dx, dy, ms]) => {
+      const el = document.querySelector(sel);
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const opt = (x, y) => ({ pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true });
+      el.dispatchEvent(new PointerEvent('pointerdown', opt(cx, cy)));
+      el.dispatchEvent(new PointerEvent('pointermove', opt(cx + dx, cy + dy)));
+      await new Promise((r) => setTimeout(r, ms));
+      const c = window.__cathedral.controls;
+      const held = { joy: { ...c.joy }, look: { ...c.lookJoy } }; // 누르고 있는 동안의 입력값
+      el.dispatchEvent(new PointerEvent('pointerup', opt(cx + dx, cy + dy)));
+      return held;
+    }, [sel, dx, dy, ms]);
+
+    await M.evaluate(() => { const c = window.__cathedral.controls; c.pos.set(0, 0, 20); c.yaw = 0; });
+    // 테스트 환경은 소프트웨어 렌더링이라 초당 프레임이 낮음 → 입력값과 이동 방향으로 검증
+    const mv = await drag('#stick-move', 0, -60, 1000);
+    const z = await M.evaluate(() => window.__cathedral.controls.pos.z);
+    check(`왼쪽 조이스틱 최대로 밀면 전진 입력 1.0 (y=${mv.joy.y.toFixed(2)})`, mv.joy.y <= -0.99);
+    check(`전진 방향으로 실제 이동 (z 20 → ${z.toFixed(2)})`, z < 19.9);
+    const lk = await drag('#stick-look', 60, 0, 1000);
+    const yaw = await M.evaluate(() => window.__cathedral.controls.yaw);
+    check(`오른쪽 조이스틱 오른쪽으로 밀면 시점 입력 (x=${lk.look.x.toFixed(2)})`, lk.look.x >= 0.99);
+    check(`시선이 오른쪽으로 회전 (yaw ${yaw.toFixed(2)})`, yaw < -0.05);
+    const small = await drag('#stick-move', 4, 0, 200);
+    check('데드존: 살짝 닿은 정도는 무시', small.joy.x === 0 && small.joy.y === 0);
+    check('손을 떼면 스틱 입력 0으로 복귀', await M.evaluate(() => { const c = window.__cathedral.controls; return !c.joy.x && !c.joy.y && !c.lookJoy.x && !c.lookJoy.y; }));
+
+    await M.evaluate(() => { const c = window.__cathedral.controls; c.pos.set(-0.9, 0, window.__cathedral.world.seats[4].z); });
+    await M.waitForFunction(() => document.querySelector('#btn-interact').textContent === '🪑 앉기');
+    await M.tap('#btn-interact');
+    await wait(200);
+    check('🪑 앉기 버튼으로 착석', await M.evaluate(() => !!window.__cathedral.controls.seat));
+    await M.waitForFunction(() => document.querySelector('#btn-interact').textContent === '🧍 일어서기', null, { timeout: 5000 }).catch(() => {});
+    check('착석 후 버튼이 🧍 일어서기로 변경', (await M.textContent('#btn-interact')) === '🧍 일어서기');
+    await M.tap('#btn-interact');
+    await wait(200);
+    check('🧍 일어서기 버튼으로 일어남', await M.evaluate(() => !window.__cathedral.controls.seat));
+
+    await M.tap('#btn-chat');
+    check('💬 버튼으로 채팅 입력창 열림', await M.isVisible('#chat-input'));
+    await M.tap('#btn-help');
+    check('❓ 버튼으로 조작 안내 다시 열기', await M.isVisible('#help-dialog'));
+    await M.tap('#help-dialog [data-tab=desktop]');
+    check('컴퓨터 탭 전환', await M.isVisible('#help-dialog [data-panel=desktop]'));
+    check('스마트폰 페이지 런타임 오류 없음', mErrors.length === 0);
+    await mctx.close();
+
+    console.log('8) 퇴장 처리');
     await B.page.context().close();
     await wait(500);
     check('B 퇴장 시 A 화면 인원 1명', (await A.page.textContent('#count')) === '1');

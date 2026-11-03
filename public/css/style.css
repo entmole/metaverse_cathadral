@@ -88,8 +88,9 @@ input {
   background: var(--panel); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px 16px 16px;
 }
-#mass-panel.collapsed > :not(.mass-head):not(h2):not(.collapse):not(.progress) { display: none !important; }
-#mass-panel.collapsed .collapse { transform: rotate(180deg); }
+#mass-panel.collapsed > :not(.mass-head):not(h2):not(.collapse):not(.progress):not(.responses) { display: none !important; }
+#mass-panel.collapsed h2 { font-size: 16px; margin: 6px 0; }
+#mass-panel:not(.collapsed) .collapse { transform: rotate(180deg); } /* 접힘 ▾(펼치기) / 펼침 ▴(접기) */
 .mass-head { display: flex; justify-content: space-between; align-items: center; }
 .chip { font-size: 12px; color: var(--gold); border: 1px solid var(--line); padding: 2px 9px; border-radius: 999px; }
 .mode { font-size: 12px; color: var(--muted); }
@@ -129,7 +130,10 @@ input {
   background: var(--panel); border: 1px solid var(--line); padding: 8px 16px; border-radius: 999px; font-size: 14px;
   white-space: nowrap;
 }
-#joystick, #btn-interact { display: none; }
+/* 터치 전용 요소는 기본 숨김, 기기별 안내 전환 */
+.stick, #touch-actions, .only-touch { display: none; }
+body.touch .only-desktop { display: none; }
+body.touch .only-touch { display: block; }
 
 #toast {
   position: fixed; left: 50%; top: 64px; transform: translate(-50%, -10px); opacity: 0; z-index: 40;
@@ -178,18 +182,95 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; ma
 #conf-body .summary { color: var(--muted); font-size: 14px; }
 .conf-foot { display: flex; justify-content: space-between; padding: 14px 20px; border-top: 1px solid var(--line); }
 
-/* ───── 모바일 ───── */
-@media (hover: none) and (pointer: coarse) {
-  #joystick {
-    display: block; position: absolute; left: 24px; bottom: calc(max(24px, env(safe-area-inset-bottom)) + 8px);
-    width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,.07); border: 1px solid var(--line); touch-action: none;
-  }
-  #joystick .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(227,191,116,.5); }
-  #btn-interact:not([hidden]) { display: block; position: absolute; right: 24px; bottom: calc(max(24px, env(safe-area-inset-bottom)) + 30px); }
-  #chat { bottom: 170px; width: min(300px, calc(100% - 32px)); }
-  .prompt { bottom: auto; top: calc(50% + 36px); white-space: normal; text-align: center; max-width: calc(100% - 32px); }
-  #chat-log { max-height: 18vh; }
+/* ───── 터치(스마트폰·태블릿) ───── */
+body.touch #hud { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.touch #hud input { -webkit-user-select: text; user-select: text; }
+body.touch .btn { touch-action: manipulation; }
+body.touch .collapse { display: block; }
+body.touch #mass-panel .mass-head { padding-right: 26px; }
+
+body.touch .stick {
+  --size: 132px;
+  display: block; position: absolute; bottom: calc(max(20px, env(safe-area-inset-bottom)) + 8px);
+  width: var(--size); height: var(--size); border-radius: 50%; touch-action: none;
+  background: radial-gradient(circle, rgba(255,255,255,.04) 0 40%, rgba(255,255,255,.1) 41% 100%);
+  border: 1.5px solid rgba(227,191,116,.45); box-shadow: inset 0 0 20px rgba(0,0,0,.35);
+  transition: border-color .15s, background .15s;
 }
+body.touch .stick.active { border-color: var(--gold-strong); background: radial-gradient(circle, rgba(227,191,116,.08) 0 40%, rgba(227,191,116,.16) 41% 100%); }
+#stick-move { left: 20px; }
+#stick-look { right: 20px; }
+.stick .knob {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f6dc9c, #c99a4a); box-shadow: 0 4px 12px rgba(0,0,0,.45);
+  pointer-events: none;
+}
+.stick.active .knob { transition: none; }
+.stick:not(.active) .knob { transition: transform .12s ease-out; }
+.stick-label {
+  position: absolute; left: 50%; top: -22px; transform: translateX(-50%); font-size: 12px; color: var(--muted);
+  white-space: nowrap; pointer-events: none; text-shadow: 0 1px 3px #000;
+}
+/* 방향 표시(▲▼◀▶) */
+.stick::before {
+  content: "▲\A◀\2003\2003\2003▶\A▼"; white-space: pre; position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 10px; line-height: 2.6; text-align: center; color: rgba(255,240,210,.35); pointer-events: none;
+}
+
+body.touch #touch-actions {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px; position: absolute; right: 20px;
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 166px);
+}
+#btn-interact { font-size: 15px; padding: 12px 18px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.round-sm { width: 48px; height: 48px; border-radius: 50%; padding: 0; font-size: 20px; background: var(--panel); backdrop-filter: blur(8px); }
+body.chat-open #btn-chat { border-color: var(--gold); }
+
+body.touch #chat { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 170px); width: min(260px, calc(100% - 120px)); }
+body.touch #chat-log { max-height: 16vh; font-size: 13px; }
+body.touch #chat-form { display: none; }
+body.touch.chat-open #chat-form { display: block; }
+body.touch.chat-open #chat { width: calc(100% - 40px); }
+body.touch .prompt { bottom: auto; top: calc(50% + 36px); white-space: normal; text-align: center; max-width: calc(100% - 32px); }
+
+/* 가로 화면(높이 낮음): 조이스틱·채팅 축소 */
+@media (max-height: 500px) {
+  body.touch .stick { --size: 108px; bottom: 12px; }
+  body.touch .stick .knob { width: 46px; height: 46px; margin: -23px 0 0 -23px; }
+  body.touch #touch-actions { bottom: 132px; flex-direction: row-reverse; align-items: center; }
+  body.touch #chat { left: 140px; bottom: 12px; width: min(280px, calc(100% - 300px)); }
+  body.touch #chat-log { max-height: 22vh; }
+  body.touch.chat-open #chat { left: 16px; width: calc(100% - 32px); bottom: 12px; z-index: 2; }
+  #mass-panel { top: 52px; max-height: calc(100% - 64px); overflow-y: auto; }
+}
+
+/* ───── 조작 안내 창 ───── */
+#help-dialog { width: min(560px, calc(100% - 24px)); max-height: 88dvh; padding: 0; display: none; flex-direction: column; overflow: hidden; }
+#help-dialog[open] { display: flex; }
+.help-head { padding: 16px 18px 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.tabs { display: flex; gap: 4px; background: rgba(255,255,255,.05); padding: 4px; border-radius: 10px; }
+.tab { background: none; border: 0; color: var(--muted); padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 14px; }
+.tab[aria-selected="true"] { background: var(--gold); color: #241a0b; font-weight: 700; }
+.help-body { padding: 14px 18px; overflow-y: auto; }
+.help-body h4 { margin: 18px 0 6px; font-family: var(--serif); color: var(--gold); }
+.help-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.help-table th { text-align: left; white-space: nowrap; color: var(--gold-strong); padding: 9px 12px 9px 0; vertical-align: top; font-weight: 600; }
+.help-table td { padding: 9px 0; color: var(--text); line-height: 1.55; }
+.help-table tr + tr { border-top: 1px solid var(--line); }
+.help-steps { padding-left: 20px; margin: 0; font-size: 14px; line-height: 1.7; color: var(--muted); }
+.help-steps b { color: var(--text); }
+.help-foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+/* 휴대폰 화면 배치 도식 */
+.phone {
+  position: relative; width: 220px; height: 150px; margin: 4px auto 14px; border: 2px solid var(--line); border-radius: 18px;
+  background: linear-gradient(180deg, #2a2030, #3a2a1e); font-size: 10px; color: #241a0b;
+}
+.phone > div { position: absolute; display: grid; place-items: center; font-weight: 700; }
+.ph-top { left: 10px; right: 10px; top: 8px; height: 20px; border-radius: 6px; background: rgba(255,255,255,.12); color: var(--muted) !important; font-weight: 400 !important; }
+.ph-stick { bottom: 10px; width: 50px; height: 50px; border-radius: 50%; border: 1.5px solid var(--gold); background: rgba(227,191,116,.25); color: var(--gold-strong) !important; }
+.ph-stick.left { left: 12px; } .ph-stick.right { right: 12px; }
+.ph-btn { right: 12px; bottom: 68px; padding: 3px 8px; border-radius: 999px; background: var(--gold); }
+.ph-chat { right: 82px; bottom: 70px; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.15); }
+
 @media (max-width: 640px) {
   #mass-panel { top: 52px; left: 16px; right: 16px; width: auto; padding: 12px 14px; }
   #mass-panel h2 { font-size: 18px; padding-right: 22px; }

@@ -30,10 +30,15 @@
         <input id="nick" maxlength="16" placeholder="예: 요셉" required />
         <button type="submit" class="btn primary">성당에 들어가기</button>
       </form>
-      <ul class="keys">
+      <ul class="keys only-desktop">
         <li><kbd>W A S D</kbd> 이동 · <kbd>마우스</kbd> 둘러보기</li>
         <li><kbd>E</kbd> 신자석 앉기 / 고해소 들어가기</li>
         <li><kbd>Enter</kbd> 채팅 · <kbd>Esc</kbd> 마우스 해제</li>
+      </ul>
+      <ul class="keys only-touch">
+        <li><b>왼쪽 조이스틱</b> 이동 · <b>오른쪽 조이스틱</b> 둘러보기</li>
+        <li>가까이 가면 나타나는 <b>🪑 앉기 · ✝ 고해 준비</b> 버튼</li>
+        <li><b>💬</b> 채팅 · <b>❓</b> 조작법 다시 보기</li>
       </ul>
       <p class="fineprint">온라인 참여는 주일·대축일 미사 참례 의무를 대체하지 않으며, 이곳의 고해 공간은 성사가 아닌 <b>준비</b>를 돕습니다.</p>
       <p id="join-error" class="error" role="alert"></p>
@@ -47,6 +52,7 @@
       <div class="actions">
         <button id="btn-sound" class="btn ghost sm" aria-pressed="true" aria-label="소리"><span class="ico">🔔</span><span class="lbl"> 소리 켬</span></button>
         <button id="btn-follow" class="btn ghost sm" aria-pressed="true" aria-label="미사 자세 자동 따라하기"><span class="ico">🧍</span><span class="lbl"> 자세 따라하기 켬</span></button>
+        <button id="btn-help" class="btn ghost sm" aria-label="조작 방법 보기"><span class="ico">❓</span><span class="lbl"> 조작법</span></button>
         <button id="btn-host" class="btn ghost sm">진행자</button>
       </div>
     </header>
@@ -69,7 +75,7 @@
         <button data-act="silence" class="btn sm" id="btn-silence">침묵 모드</button>
         <button data-act="reset" class="btn danger sm">종료</button>
       </div>
-      <button id="mass-collapse" class="collapse" aria-label="미사 안내 접기">▾</button>
+      <button id="mass-collapse" class="collapse" aria-label="미사 안내 펼치기·접기">▾</button>
     </section>
 
     <section id="chat">
@@ -80,8 +86,13 @@
     </section>
 
     <div id="prompt" class="prompt" hidden></div>
-    <div id="joystick" aria-hidden="true"><div class="knob"></div></div>
-    <button id="btn-interact" class="btn primary round" hidden>E</button>
+    <!-- 터치 조작: 왼쪽 이동 / 오른쪽 시점 조이스틱 + 동작 버튼 -->
+    <div id="stick-move" class="stick" aria-hidden="true"><span class="stick-label">이동</span><div class="knob"></div></div>
+    <div id="stick-look" class="stick" aria-hidden="true"><span class="stick-label">둘러보기</span><div class="knob"></div></div>
+    <div id="touch-actions">
+      <button id="btn-interact" class="btn primary" hidden>E</button>
+      <button id="btn-chat" class="btn round-sm" aria-label="채팅 열기">💬</button>
+    </div>
   </div>
 
   <!-- ───── 진행자 키 입력 ───── -->
@@ -94,6 +105,55 @@
         <button value="cancel" class="btn ghost">취소</button>
         <button value="ok" class="btn primary">확인</button>
       </menu>
+    </form>
+  </dialog>
+
+  <!-- ───── 조작 안내 ───── -->
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <header class="help-head">
+      <h3 id="help-title">조작 방법</h3>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="touch" class="tab">📱 스마트폰</button>
+        <button role="tab" data-tab="desktop" class="tab">💻 컴퓨터</button>
+      </div>
+    </header>
+    <div class="help-body">
+      <section data-panel="touch" role="tabpanel">
+        <div class="phone" aria-hidden="true">
+          <div class="ph-top">미사 안내 (▾ 탭하여 펼치기)</div>
+          <div class="ph-btn">🪑 앉기</div>
+          <div class="ph-chat">💬</div>
+          <div class="ph-stick left">이동</div>
+          <div class="ph-stick right">둘러보기</div>
+        </div>
+        <table class="help-table">
+          <tr><th>이동</th><td><b>왼쪽 아래 조이스틱</b>을 가고 싶은 방향으로 밉니다. 많이 밀수록 빨라집니다.</td></tr>
+          <tr><th>둘러보기</th><td><b>오른쪽 아래 조이스틱</b>을 밀거나, 빈 화면을 손가락으로 끌어 시선을 돌립니다.</td></tr>
+          <tr><th>앉기 · 일어서기</th><td>신자석 가까이 가면 <b>🪑 앉기</b> 버튼이 나타납니다. 일어설 때는 <b>🧍 일어서기</b>를 누르거나 왼쪽 조이스틱을 밉니다.</td></tr>
+          <tr><th>고해 준비</th><td>양쪽 벽의 고해소 앞에서 <b>✝ 고해 준비</b>를 누릅니다. 초록 등은 비어 있음, 빨간 등은 사용 중입니다.</td></tr>
+          <tr><th>채팅</th><td>오른쪽 <b>💬</b> 버튼을 누르면 입력창이 열립니다.</td></tr>
+          <tr><th>미사 안내</th><td>위쪽 안내 패널의 <b>▾</b>를 눌러 펼치거나 접습니다.</td></tr>
+        </table>
+      </section>
+      <section data-panel="desktop" role="tabpanel">
+        <table class="help-table">
+          <tr><th><kbd>W A S D</kbd> · <kbd>방향키</kbd></th><td>이동</td></tr>
+          <tr><th><kbd>마우스</kbd></th><td>화면을 한 번 클릭한 뒤 마우스를 움직여 둘러봅니다.</td></tr>
+          <tr><th><kbd>E</kbd></th><td>신자석에 앉기 · 일어서기 · 고해소 들어가기 (화면 가운데 안내가 보일 때)</td></tr>
+          <tr><th><kbd>Enter</kbd></th><td>채팅 입력 시작 / 보내기</td></tr>
+          <tr><th><kbd>Esc</kbd></th><td>마우스 해제 · 창 닫기 · 고해소 나가기</td></tr>
+        </table>
+      </section>
+      <h4>미사에 참여하는 방법</h4>
+      <ol class="help-steps">
+        <li>신자석에 앉으면 미사 단계에 맞춰 <b>서기 · 앉기 · 무릎 꿇기</b> 자세를 자동으로 따릅니다. (상단 🧍 버튼으로 끄기)</li>
+        <li>안내 패널의 <b>응답 버튼</b>(예: "아멘.")을 누르면 다른 신자들에게 말풍선으로 보입니다.</li>
+        <li>진행자가 없으면 <b>자동 진행 미사 시작</b>으로 미사를 시작할 수 있습니다.</li>
+        <li><b>🔔</b> 종소리 켜기/끄기 · <b>진행자</b> 버튼은 진행자 키를 받은 분만 사용합니다.</li>
+      </ol>
+    </div>
+    <form method="dialog" class="help-foot">
+      <button class="btn primary">확인</button>
     </form>
   </dialog>
 
