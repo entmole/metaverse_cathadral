@@ -7,7 +7,7 @@ import { Net } from './network.js';
 import { MassUI } from './ui/mass.js';
 import { ChatUI } from './ui/chat.js';
 import { ConfessionUI } from './ui/confession.js';
-import { initAudio, bell, setSound, isSoundOn } from './audio.js';
+import { initAudio, bell, setAmbient, setBellOn, setVolume, setAmbienceLevel, getPrefs, audioState } from './audio.js';
 import { HelpUI } from './ui/help.js';
 import { $, toast } from './ui/dom.js';
 
@@ -60,6 +60,7 @@ let myBooth = null;
 
 const massUI = new MassUI(net, massOrder, (step, changed) => {
   world.setLightMode(step?.light || 'normal');
+  setAmbienceLevel(step?.ambience || 'prelude'); // 미사 전에는 잔잔한 전주
   if (!changed) return;
   if (step?.bell) bell(step.id === 'consecration' ? 3 : 2);
   // 신자석에 있으면 단계 자세를 자동으로 따름
@@ -168,13 +169,37 @@ const help = new HelpUI();
 $('#btn-help').addEventListener('click', () => help.open());
 
 // ───────── 상단 버튼 ─────────
-$('#btn-sound').addEventListener('click', (e) => {
-  setSound(!isSoundOn());
-  const btn = e.currentTarget;
-  btn.setAttribute('aria-pressed', String(isSoundOn()));
-  btn.querySelector('.ico').textContent = isSoundOn() ? '🔔' : '🔕';
-  btn.querySelector('.lbl').textContent = isSoundOn() ? ' 소리 켬' : ' 소리 끔';
+// 소리 설정 패널
+const soundBtn = $('#btn-sound');
+const soundPanel = $('#sound-panel');
+const sndAmbient = $('#snd-ambient');
+const sndBell = $('#snd-bell');
+const sndVol = $('#snd-volume');
+function syncSoundUI() {
+  const p = getPrefs();
+  sndAmbient.checked = p.ambient;
+  sndBell.checked = p.bell;
+  sndVol.value = Math.round(p.volume * 100);
+  $('#snd-volume-out').textContent = `${sndVol.value}%`;
+  const muted = p.volume === 0 || (!p.ambient && !p.bell);
+  soundBtn.querySelector('.ico').textContent = muted ? '🔇' : '🔊';
+}
+syncSoundUI();
+soundBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  soundPanel.hidden = !soundPanel.hidden;
+  soundBtn.setAttribute('aria-expanded', String(!soundPanel.hidden));
+  if (!soundPanel.hidden) document.exitPointerLock?.();
 });
+document.addEventListener('pointerdown', (e) => {
+  if (!soundPanel.hidden && !soundPanel.contains(e.target) && !soundBtn.contains(e.target)) {
+    soundPanel.hidden = true;
+    soundBtn.setAttribute('aria-expanded', 'false');
+  }
+});
+sndAmbient.addEventListener('change', () => { setAmbient(sndAmbient.checked); syncSoundUI(); });
+sndBell.addEventListener('change', () => { setBellOn(sndBell.checked); syncSoundUI(); });
+sndVol.addEventListener('input', () => { setVolume(sndVol.value / 100); syncSoundUI(); });
 $('#btn-follow').addEventListener('click', (e) => {
   followPosture = !followPosture;
   const btn = e.currentTarget;
@@ -251,4 +276,4 @@ renderer.setAnimationLoop(() => {
 });
 
 // 테스트·디버깅용 최소 노출(개인 메모는 포함하지 않음)
-window.__cathedral = { controls, world, avatars, massUI, net, help };
+window.__cathedral = { controls, world, avatars, massUI, net, help, audioState };

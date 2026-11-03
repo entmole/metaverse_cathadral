@@ -50,12 +50,20 @@
     <header id="topbar">
       <div class="presence"><span class="dot"></span><span id="count">0</span>명<span class="lbl"> 함께 기도 중</span></div>
       <div class="actions">
-        <button id="btn-sound" class="btn ghost sm" aria-pressed="true" aria-label="소리"><span class="ico">🔔</span><span class="lbl"> 소리 켬</span></button>
+        <button id="btn-sound" class="btn ghost sm" aria-expanded="false" aria-controls="sound-panel" aria-label="소리 설정"><span class="ico">🔊</span><span class="lbl"> 소리</span></button>
         <button id="btn-follow" class="btn ghost sm" aria-pressed="true" aria-label="미사 자세 자동 따라하기"><span class="ico">🧍</span><span class="lbl"> 자세 따라하기 켬</span></button>
         <button id="btn-help" class="btn ghost sm" aria-label="조작 방법 보기"><span class="ico">❓</span><span class="lbl"> 조작법</span></button>
         <button id="btn-host" class="btn ghost sm">진행자</button>
       </div>
     </header>
+
+    <!-- 소리 설정 -->
+    <section id="sound-panel" hidden aria-label="소리 설정">
+      <label class="snd-row"><span>🎹 배경 오르간·성당 울림</span><input type="checkbox" id="snd-ambient" /></label>
+      <label class="snd-row"><span>🔔 종소리</span><input type="checkbox" id="snd-bell" /></label>
+      <label class="snd-row vol"><span>음량</span><input type="range" id="snd-volume" min="0" max="100" step="5" /><output id="snd-volume-out"></output></label>
+      <p class="snd-hint">미사 단계에 따라 오르간 소리가 자동으로 커지거나 잦아듭니다. 아이폰은 무음 모드 스위치를 끄셔야 들립니다.</p>
+    </section>
 
     <section id="mass-panel" aria-live="polite">
       <div class="mass-head">
@@ -149,7 +157,8 @@
         <li>신자석에 앉으면 미사 단계에 맞춰 <b>서기 · 앉기 · 무릎 꿇기</b> 자세를 자동으로 따릅니다. (상단 🧍 버튼으로 끄기)</li>
         <li>안내 패널의 <b>응답 버튼</b>(예: "아멘.")을 누르면 다른 신자들에게 말풍선으로 보입니다.</li>
         <li>진행자가 없으면 <b>자동 진행 미사 시작</b>으로 미사를 시작할 수 있습니다.</li>
-        <li><b>🔔</b> 종소리 켜기/끄기 · <b>진행자</b> 버튼은 진행자 키를 받은 분만 사용합니다.</li>
+        <li><b>🔊</b> 버튼에서 배경 오르간·종소리를 켜고 끄며 음량을 조절합니다. 오르간은 입당·봉헌·영성체 때 커지고, 독서·강론·축성 때는 잦아듭니다.</li>
+        <li><b>진행자</b> 버튼은 진행자 키를 받은 분만 사용합니다.</li>
       </ol>
     </div>
     <form method="dialog" class="help-foot">

@@ -47,7 +47,7 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     await wait(500);
     check('B 화면에 접속자 2명 표시', (await B.page.textContent('#count')) === '2');
     await A.page.evaluate(() => window.__cathedral.controls.pos.set(-9, 0, 0));
-    await wait(800);
+    await B.page.waitForFunction(() => Math.abs([...window.__cathedral.avatars.items.values()][0].target.x + 9) < 0.1, null, { timeout: 5000 }).catch(() => {});
     const seen = await B.page.evaluate(() => [...window.__cathedral.avatars.items.values()][0].target.x);
     check('A의 이동이 B에 반영', Math.abs(seen - -9) < 0.1);
 
@@ -63,6 +63,33 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     await A.page.click('#host-controls [data-act=next]');
     await wait(400);
     check('B HUD가 2단계(성호경과 인사)로 동기화', (await B.page.textContent('#mass-title')) === '성호경과 인사');
+
+    console.log('2-1) 배경음');
+    const au = () => B.page.evaluate(() => window.__cathedral.audioState());
+    let st = await au();
+    check(`입장 후 오디오 재생 상태 (${st.ctx})`, st.ctx === 'running' && st.ambientPlaying);
+    check(`미사 단계(인사)에 맞춰 오르간 '잔잔하게' (${st.level})`, st.level === 'soft');
+    await A.page.click('#host-controls [data-act=next]');
+    await A.page.click('#host-controls [data-act=next]');
+    await wait(400);
+    check(`침묵 단계(참회 다음 대영광송) 오르간 연주 (${(await au()).level})`, (await au()).level === 'organ');
+    await A.page.click('#host-controls [data-act=prev]');
+    await wait(400);
+    check(`참회 예식은 오르간 멈춤 (${(await au()).level})`, (await au()).level === 'silent');
+    await B.page.click('#btn-sound');
+    check('🔊 버튼으로 소리 설정 열기', await B.page.isVisible('#sound-panel'));
+    await B.page.uncheck('#snd-ambient');
+    st = await au();
+    check('배경음 끄기', !st.ambientPlaying && st.prefs.ambient === false);
+    await B.page.fill('#snd-volume', '30');
+    check('음량 조절 30%', (await au()).prefs.volume === 0.3 && (await B.page.textContent('#snd-volume-out')) === '30%');
+    await B.page.check('#snd-ambient');
+    check('배경음 다시 켜기', (await au()).ambientPlaying);
+    await B.page.click('#topbar .presence'); // 3D 화면을 누르면 마우스가 잠기므로 HUD 빈 곳을 누름
+    check('바깥을 누르면 소리 설정 닫힘', await B.page.isHidden('#sound-panel'));
+    // 이후 검사를 위해 2단계(성호경과 인사)로 복귀
+    await A.page.click('#host-controls [data-act=prev]');
+    await wait(300);
 
     console.log('3) 응답 버튼');
     await B.page.click('#mass-responses button:nth-child(2)');
@@ -141,11 +168,11 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
 
     await M.evaluate(() => { const c = window.__cathedral.controls; c.pos.set(0, 0, 20); c.yaw = 0; });
     // 테스트 환경은 소프트웨어 렌더링이라 초당 프레임이 낮음 → 입력값과 이동 방향으로 검증
-    const mv = await drag('#stick-move', 0, -60, 1000);
+    const mv = await drag('#stick-move', 0, -60, 2500);
     const z = await M.evaluate(() => window.__cathedral.controls.pos.z);
     check(`왼쪽 조이스틱 최대로 밀면 전진 입력 1.0 (y=${mv.joy.y.toFixed(2)})`, mv.joy.y <= -0.99);
     check(`전진 방향으로 실제 이동 (z 20 → ${z.toFixed(2)})`, z < 19.9);
-    const lk = await drag('#stick-look', 60, 0, 1000);
+    const lk = await drag('#stick-look', 60, 0, 2500);
     const yaw = await M.evaluate(() => window.__cathedral.controls.yaw);
     check(`오른쪽 조이스틱 오른쪽으로 밀면 시점 입력 (x=${lk.look.x.toFixed(2)})`, lk.look.x >= 0.99);
     check(`시선이 오른쪽으로 회전 (yaw ${yaw.toFixed(2)})`, yaw < -0.05);
