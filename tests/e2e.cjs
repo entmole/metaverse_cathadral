@@ -1,5 +1,5 @@
 /**
- * E2E 검증: 두 브라우저로 동시 접속해 동기화·권한·개인정보 원칙을 확인한다.
+ * E2E 검증: 두 브라우저로 동시 접속해 동기화·자동 미사·개인정보 원칙을 확인한다.
  * 실행: npm test   (Playwright + Chromium 필요)
  */
 const { spawn } = require('child_process');
@@ -9,16 +9,41 @@ const { chromium } = require('playwright');
 
 const PORT = 3200 + Math.floor(Math.random() * 500);
 const URL = `http://localhost:${PORT}`;
-const HOST_KEY = 'e2e-key';
+const MASS_SPEED = 5; // 테스트에서 미사 시간 5배속 (10초 단계 → 2초)
 const SECRET_MEMO = '비밀메모-절대전송금지-7731';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let passed = 0;
 const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  ✔ ${name}`); };
 
+/** 미사 자동 반복 상태 머신 단위 검사 (100배속, 약 4초) */
+async function unitMassLoop() {
+  console.log('0) 미사 자동 진행 상태 머신');
+  process.env.MASS_SPEED = '100';
+  const { MassController, STEPS, BREAK_SEC } = require('../server/mass.js');
+  delete process.env.MASS_SPEED;
+  const durs = STEPS.map((x) => x.duration);
+  check(`단계 시간은 10초 또는 20초 (${durs.filter((d) => d === 20).length}개 20초 / ${durs.filter((d) => d === 10).length}개 10초)`, durs.every((d) => d === 10 || d === 20));
+  check(`미사 1회 ${durs.reduce((a, b) => a + b, 0)}초 + 휴식 ${BREAK_SEC}초`, BREAK_SEC === 10);
+  const log = [];
+  const m = new MassController((st) => log.push(st));
+  check('접속자 없으면 대기(idle)', m.snapshot().mode === 'idle');
+  m.setOccupied(true);
+  check('첫 접속 → 휴식 시작', log.at(-1).mode === 'break' && log.at(-1).phaseMs === 100);
+  const total = (durs.reduce((a, b) => a + b, 0) + BREAK_SEC) * 10; // 100배속 ms
+  await wait(total + 600);
+  const runs = log.filter((x) => x.mode === 'running');
+  check('휴식 후 1번째 미사가 입당부터 순서대로 진행', runs.slice(0, STEPS.length).every((x, i) => x.stepIndex === i && x.massCount === 1));
+  check('미사가 끝나면 다시 휴식 후 2번째 미사 자동 시작', log.some((x) => x.mode === 'break' && x.massCount === 1) && runs.some((x) => x.massCount === 2 && x.stepIndex === 0));
+  check('응답 문구는 미사 중 현재 단계 것만 허용', m.responseText(99) === null);
+  m.setOccupied(false);
+  check('모두 나가면 정지(idle)', m.snapshot().mode === 'idle');
+}
+
 (async () => {
+  await unitMassLoop();
   const server = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'index.js')], {
-    env: { ...process.env, PORT: String(PORT), MASS_HOST_KEY: HOST_KEY }, stdio: 'pipe',
+    env: { ...process.env, PORT: String(PORT), MASS_SPEED: String(MASS_SPEED) }, stdio: 'pipe',
   });
   await new Promise((res) => server.stdout.on('data', (d) => String(d).includes('http://') && res()));
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -51,32 +76,54 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     const seen = await B.page.evaluate(() => [...window.__cathedral.avatars.items.values()][0].target.x);
     check('A의 이동이 B에 반영', Math.abs(seen - -9) < 0.1);
 
-    console.log('2) 미사 진행 권한');
-    await B.page.evaluate(() => window.__cathedral.net.send({ t: 'mass', action: 'next' }));
-    await wait(300);
-    check('진행자 아닌 사용자의 단계 조작 거부', (await B.page.evaluate(() => window.__cathedral.massUI.state.stepIndex)) === -1);
-    await A.page.click('#btn-host');
-    await A.page.fill('#host-key', HOST_KEY);
-    await A.page.click('#host-form button[value=ok]');
-    await A.page.waitForSelector('#host-controls:not([hidden])');
-    await A.page.click('#host-controls [data-act=next]');
-    await A.page.click('#host-controls [data-act=next]');
-    await wait(400);
-    check('B HUD가 2단계(성호경과 인사)로 동기화', (await B.page.textContent('#mass-title')) === '성호경과 인사');
+    console.log('1-1) 사제복 블록 아바타');
+    const avB = () => A.page.evaluate(() => {
+      const it = [...window.__cathedral.avatars.items.values()][0];
+      return { legs: it.legs.length, arms: it.arms.length, vest: it.vest, nearest: it.tex.magFilter,
+        thigh: it.legs[0].thigh.rotation.x, knee: it.legs[0].knee.rotation.x, arm: it.arms[0].rotation.x, gesture: it.gesture };
+    });
+    let av = await avB();
+    check(`블록 부위 구성(다리 ${av.legs}·팔 ${av.arms})과 픽셀 텍스처`, av.legs === 2 && av.arms === 2 && av.nearest === 1003);
+    check(`전례색 제의 (${av.vest})`, ['백색', '녹색', '자색', '홍색', '금색'].includes(av.vest));
+    const vestOfMaria = av.vest;
+    await B.page.evaluate(() => { window.__cathedral.controls.pose = 'sit'; });
+    await A.page.waitForFunction(() => [...window.__cathedral.avatars.items.values()][0].legs[0].thigh.rotation.x > 1.4, null, { timeout: 10000 }).catch(() => {});
+    av = await avB();
+    check(`앉으면 허벅지 앞으로·정강이 아래로 (${av.thigh.toFixed(2)}, ${av.knee.toFixed(2)})`, av.thigh > 1.4 && av.knee < -1.4);
+    await B.page.evaluate(() => { window.__cathedral.controls.pose = 'kneel'; });
+    await A.page.waitForFunction(() => [...window.__cathedral.avatars.items.values()][0].arms[0].rotation.x > 0.9, null, { timeout: 10000 }).catch(() => {});
+    av = await avB();
+    check(`무릎 꿇으면 두 손 모음 (팔 ${av.arm.toFixed(2)})`, av.arm > 0.9 && Math.abs(av.thigh) < 0.2);
+    await B.page.evaluate(() => { window.__cathedral.controls.pose = 'stand'; });
+
+    console.log('2) 자동 미사 (진행자 없음)');
+    // 특정 단계가 될 때까지 대기 (자동 진행이라 최대 미사 한 바퀴)
+    const waitStep = (P, pred, timeout = 90000) => P.page.waitForFunction(pred, null, { timeout, polling: 100 });
+    const stepIs = (id) => `window.__cathedral.massUI.currentStep?.id === '${id}'`;
+    check('진행자 버튼·키 입력 창 없음', (await A.page.locator('#btn-host, #host-dialog, #host-controls, #btn-start-auto').count()) === 0);
+    await waitStep(A, () => window.__cathedral.massUI.state.mode === 'running', 20000);
+    check('휴식 후 미사 자동 시작', (await A.page.evaluate(() => window.__cathedral.massUI.state.massCount)) >= 1);
+    await waitStep(B, stepIs('greeting'));
+    check('B HUD가 자동으로 2단계(성호경과 인사) 표시', (await B.page.textContent('#mass-title')) === '성호경과 인사');
+    check('A·B 같은 단계', (await A.page.evaluate(() => window.__cathedral.massUI.state.stepIndex)) === (await B.page.evaluate(() => window.__cathedral.massUI.state.stepIndex)));
+    check('남은 시간 표시', /다음 단계까지 \d+초/.test(await B.page.textContent('#mass-timer')));
+    const lvGreeting = await B.page.evaluate(() => window.__cathedral.audioState().level);
+    check(`인사 단계 오르간 '잔잔하게' (${lvGreeting})`, lvGreeting === 'soft');
+    // 예전 진행자 메시지는 서버가 무시
+    const before = await B.page.evaluate(() => window.__cathedral.massUI.state.stepIndex);
+    await B.page.evaluate(() => { const n = window.__cathedral.net; n.send({ t: 'host', key: 'x' }); for (let i = 0; i < 5; i++) n.send({ t: 'mass', action: 'next' }); });
+    await wait(150);
+    check('진행자·단계 조작 메시지 무시', (await B.page.evaluate(() => window.__cathedral.massUI.state.stepIndex)) === before);
 
     console.log('2-1) 배경음');
     const au = () => B.page.evaluate(() => window.__cathedral.audioState());
     let st = await au();
     check(`입장 후 오디오 재생 상태 (${st.ctx})`, st.ctx === 'running' && st.ambientPlaying);
-    check(`미사 단계(인사)에 맞춰 오르간 '잔잔하게' (${st.level})`, st.level === 'soft');
     check(`기본 음량 80% (${st.prefs.volume})`, st.prefs.volume === 0.8 && (await B.page.textContent('#snd-volume-out')) === '80%');
-    await A.page.click('#host-controls [data-act=next]');
-    await A.page.click('#host-controls [data-act=next]');
-    await wait(400);
-    check(`침묵 단계(참회 다음 대영광송) 오르간 연주 (${(await au()).level})`, (await au()).level === 'organ');
-    await A.page.click('#host-controls [data-act=prev]');
-    await wait(400);
+    await waitStep(B, stepIs('penitential'));
     check(`참회 예식은 오르간 멈춤 (${(await au()).level})`, (await au()).level === 'silent');
+    await waitStep(B, stepIs('gloria'));
+    check(`대영광송은 오르간 연주 (${(await au()).level})`, (await au()).level === 'organ');
     await B.page.click('#btn-sound');
     check('🔊 버튼으로 소리 설정 열기', await B.page.isVisible('#sound-panel'));
     await B.page.uncheck('#snd-ambient');
@@ -88,12 +135,13 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     check('배경음 다시 켜기', (await au()).ambientPlaying);
     await B.page.click('#topbar .presence'); // 3D 화면을 누르면 마우스가 잠기므로 HUD 빈 곳을 누름
     check('바깥을 누르면 소리 설정 닫힘', await B.page.isHidden('#sound-panel'));
-    // 이후 검사를 위해 2단계(성호경과 인사)로 복귀
-    await A.page.click('#host-controls [data-act=prev]');
-    await wait(300);
 
     console.log('3) 응답 버튼');
-    await B.page.click('#mass-responses button:nth-child(2)');
+    await waitStep(B, () => {
+      const ui = window.__cathedral.massUI;
+      return ui.currentStep?.responses.length > 0 && ui.phaseEndsAt - Date.now() > 1200;
+    });
+    await B.page.click('#mass-responses button:nth-child(1)');
     await wait(400);
     const bubble = await A.page.evaluate(() => !![...window.__cathedral.avatars.items.values()][0].bubble);
     check('B의 응답이 A 화면에 말풍선으로 표시', bubble);
@@ -104,12 +152,6 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     await wait(400);
     check('채팅에 HTML 태그가 생성되지 않음', (await A.page.locator('#chat-log img').count()) === 0);
     check('채팅 문자열은 텍스트로 표시', (await A.page.textContent('#chat-log')).includes('<img src=x'));
-
-    console.log('5) 침묵 모드');
-    await A.page.click('#btn-silence');
-    await wait(300);
-    check('침묵 모드에서 일반 사용자 입력 비활성화', await B.page.isDisabled('#chat-input'));
-    await A.page.click('#btn-silence');
 
     console.log('6) 고해소 점유·개인정보');
     for (const P of [A, B]) await P.page.evaluate(() => { const c = window.__cathedral.controls; c.pos.set(-9.5, 0, 14); });
@@ -182,17 +224,10 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     await B.page.keyboard.press('KeyF');
     await A.page.waitForFunction(() => [...window.__cathedral.avatars.items.values()][0].gesture === 'peace', null, { timeout: 5000 }).catch(() => {});
     check('F키 평화의 인사가 A 화면에 보임', (await otherOf(A)) === 'peace');
-    // 진행자가 '평화의 인사' 단계로 이동 → 패널에 버튼 표시
-    await A.page.evaluate(async () => {
-      const ui = window.__cathedral.massUI;
-      while (ui.order.steps[ui.state.stepIndex]?.id !== 'peace') {
-        window.__cathedral.net.send({ t: 'mass', action: 'next' });
-        await new Promise((r) => setTimeout(r, 120));
-      }
-    });
-    await B.page.waitForSelector('#btn-peace-step:not([hidden])', { timeout: 5000 }).catch(() => {});
+    await wait(1600); // 서버 연속 인사 제한(1.5초)
+    // 자동 진행으로 '평화의 인사' 단계가 오면 패널에 버튼 표시
+    await waitStep(B, stepIs('peace'));
     check('평화의 인사 단계에 🕊 버튼 표시', await B.page.isVisible('#btn-peace-step'));
-    await wait(1700);
     await B.page.click('#btn-peace-step');
     await A.page.waitForFunction(() => [...window.__cathedral.avatars.items.values()][0].gesture === 'peace', null, { timeout: 5000 }).catch(() => {});
     check('🕊 버튼으로 평화의 인사', (await otherOf(A)) === 'peace');
@@ -261,6 +296,8 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     check('스마트폰: 아바타를 톡 눌러 인사 카드 열기', (await M.isVisible('#avatar-card')) && (await M.textContent('#ac-name')) === '요셉');
     await M.tap('#ac-close');
     check('스마트폰: 🕊 평화의 인사 버튼 표시', await M.isVisible('#btn-peace'));
+    const mariaOnM = await M.evaluate(() => [...window.__cathedral.avatars.items.values()].find((it) => it.name === '마리아')?.vest);
+    check(`같은 사람은 다른 화면에서도 같은 제의 색 (${vestOfMaria} = ${mariaOnM})`, mariaOnM === vestOfMaria);
 
     await M.tap('#btn-chat');
     check('💬 버튼으로 채팅 입력창 열림', await M.isVisible('#chat-input'));

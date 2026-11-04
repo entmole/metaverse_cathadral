@@ -15,7 +15,7 @@
       "title": "입당",
       "desc": "사제와 봉사자들이 제대로 입장합니다. 입당 성가를 함께 부릅니다.",
       "posture": "stand",
-      "duration": 40,
+      "duration": 20,
       "light": "normal",
       "bell": true,
       "responses": []
@@ -27,7 +27,7 @@
       "title": "성호경과 인사",
       "desc": "사제가 성호경을 바치고 교우들에게 인사합니다.",
       "posture": "stand",
-      "duration": 30,
+      "duration": 10,
       "light": "normal",
       "responses": ["아멘.", "또한 사제의 영과 함께."]
     },
@@ -38,7 +38,7 @@
       "title": "참회 예식 · 자비송",
       "desc": "잠시 침묵하며 자신의 죄를 성찰하고, 고백 기도를 바친 뒤 자비를 청합니다.",
       "posture": "stand",
-      "duration": 50,
+      "duration": 20,
       "light": "dim",
       "responses": ["주님, 자비를 베푸소서.", "그리스도님, 자비를 베푸소서.", "아멘."]
     },
@@ -49,7 +49,7 @@
       "title": "대영광송 · 본기도",
       "desc": "주일과 대축일에는 대영광송을 노래하고, 사제가 본기도를 바칩니다.",
       "posture": "stand",
-      "duration": 40,
+      "duration": 10,
       "light": "bright",
       "responses": ["아멘."]
     },
@@ -60,7 +60,7 @@
       "title": "제1독서 · 화답송",
       "desc": "구약 성경 말씀을 듣고, 화답송으로 응답합니다.",
       "posture": "sit",
-      "duration": 60,
+      "duration": 20,
       "light": "word",
       "responses": ["하느님, 감사합니다."]
     },
@@ -71,7 +71,7 @@
       "title": "제2독서",
       "desc": "사도들의 서간 말씀을 듣습니다. (주일·대축일)",
       "posture": "sit",
-      "duration": 45,
+      "duration": 10,
       "light": "word",
       "responses": ["하느님, 감사합니다."]
     },
@@ -82,7 +82,7 @@
       "title": "복음 환호송 · 복음 낭독",
       "desc": "일어서서 복음을 맞이합니다. 이마·입술·가슴에 작은 십자가를 긋습니다.",
       "posture": "stand",
-      "duration": 60,
+      "duration": 20,
       "light": "word",
       "responses": ["알렐루야.", "또한 사제의 영과 함께.", "주님, 영광받으소서.", "그리스도님, 찬미합니다."]
     },
@@ -93,7 +93,7 @@
       "title": "강론",
       "desc": "앉아서 말씀의 의미를 묵상합니다.",
       "posture": "sit",
-      "duration": 90,
+      "duration": 20,
       "light": "word",
       "responses": []
     },
@@ -104,7 +104,7 @@
       "title": "신앙 고백",
       "desc": "사도신경 또는 니케아-콘스탄티노폴리스 신경으로 신앙을 고백합니다.",
       "posture": "stand",
-      "duration": 50,
+      "duration": 20,
       "light": "normal",
       "responses": ["아멘."]
     },
@@ -115,7 +115,7 @@
       "title": "보편 지향 기도",
       "desc": "교회와 세상, 어려움을 겪는 이들과 공동체를 위해 기도합니다.",
       "posture": "stand",
-      "duration": 50,
+      "duration": 10,
       "light": "normal",
       "responses": ["주님, 저희의 기도를 들어주소서.", "아멘."]
     },
@@ -126,7 +126,7 @@
       "title": "예물 준비",
       "desc": "빵과 포도주를 제대에 준비합니다. 봉헌 성가를 부릅니다.",
       "posture": "sit",
-      "duration": 50,
+      "duration": 10,
       "light": "altar",
       "responses": ["아멘."]
     },
@@ -137,7 +137,7 @@
       "title": "감사송 · 거룩하시도다",
       "desc": "마음을 드높여 하느님께 감사와 찬미를 드립니다.",
       "posture": "stand",
-      "duration": 50,
+      "duration": 20,
       "light": "altar",
       "responses": ["또한 사제의 영과 함께.", "주님께 올립니다.", "마땅하고 옳은 일입니다."]
     },
@@ -148,7 +148,7 @@
       "title": "성찬 제정과 축성",
       "desc": "빵과 포도주가 그리스도의 몸과 피로 축성됩니다. 무릎을 꿇거나 깊은 절로 경배합니다(본당 관습에 따름).",
       "posture": "kneel",
-      "duration": 60,
+      "duration": 20,
       "light": "consecration",
       "bell": true,
       "responses": []
@@ -160,7 +160,7 @@
       "title": "신앙의 신비 · 마침 영광송",
       "desc": "신앙의 신비를 환호하고, 감사기도를 마치는 영광송에 '아멘'으로 응답합니다.",
       "posture": "stand",
-      "duration": 40,
+      "duration": 10,
       "light": "altar",
       "responses": ["아멘."]
     },
@@ -171,7 +171,7 @@
       "title": "주님의 기도",
       "desc": "예수님께서 가르쳐 주신 기도를 함께 바칩니다.",
       "posture": "stand",
-      "duration": 40,
+      "duration": 10,
       "light": "altar",
       "responses": ["아멘."]
     },
@@ -182,7 +182,7 @@
       "title": "평화의 인사",
       "desc": "주위 사람들과 평화의 인사를 나눕니다.",
       "posture": "stand",
-      "duration": 30,
+      "duration": 20,
       "light": "bright",
       "responses": ["또한 사제의 영과 함께.", "평화를 빕니다."]
     },
@@ -193,7 +193,7 @@
       "title": "하느님의 어린양",
       "desc": "성체를 쪼개는 동안 '하느님의 어린양'을 노래합니다.",
       "posture": "stand",
-      "duration": 30,
+      "duration": 10,
       "light": "altar",
       "responses": []
     },
@@ -204,7 +204,7 @@
       "title": "영성체 · 신령성체",
       "desc": "현장에서 성체를 모시지 못하는 이는 마음으로 주님을 모시는 신령성체(영적 영성체)를 바칩니다.",
       "posture": "kneel",
-      "duration": 90,
+      "duration": 20,
       "light": "consecration",
       "responses": ["아멘."]
     },
@@ -215,7 +215,7 @@
       "title": "영성체 후 기도",
       "desc": "받은 은총에 감사하며 사제와 함께 기도합니다.",
       "posture": "stand",
-      "duration": 30,
+      "duration": 10,
       "light": "normal",
       "responses": ["아멘."]
     },
@@ -226,7 +226,7 @@
       "title": "강복 · 파견",
       "desc": "사제의 강복을 받고, 일상 속으로 파견됩니다. 퇴장 성가를 부릅니다.",
       "posture": "stand",
-      "duration": 40,
+      "duration": 20,
       "light": "bright",
       "bell": true,
       "responses": ["또한 사제의 영과 함께.", "아멘.", "하느님, 감사합니다."]

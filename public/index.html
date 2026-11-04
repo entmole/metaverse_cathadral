@@ -53,7 +53,6 @@
         <button id="btn-sound" class="btn ghost sm" aria-expanded="false" aria-controls="sound-panel" aria-label="소리 설정"><span class="ico">🔊</span><span class="lbl"> 소리</span></button>
         <button id="btn-follow" class="btn ghost sm" aria-pressed="true" aria-label="미사 자세 자동 따라하기"><span class="ico">🧍</span><span class="lbl"> 자세 따라하기 켬</span></button>
         <button id="btn-help" class="btn ghost sm" aria-label="조작 방법 보기"><span class="ico">❓</span><span class="lbl"> 조작법</span></button>
-        <button id="btn-host" class="btn ghost sm">진행자</button>
       </div>
     </header>
 
@@ -71,19 +70,12 @@
         <span id="mass-mode" class="mode"></span>
       </div>
       <h2 id="mass-title">미사를 기다리는 중</h2>
-      <p id="mass-desc">진행자가 미사를 시작하거나, 아래 버튼으로 자동 진행 미사를 시작할 수 있습니다.</p>
+      <p id="mass-desc">잠시 후 미사가 자동으로 시작됩니다.</p>
       <div id="mass-posture" class="posture"></div>
       <div id="mass-responses" class="responses"></div>
       <button id="btn-peace-step" class="btn primary sm" hidden>🕊 평화의 인사 나누기</button>
       <div class="progress"><div id="mass-progress"></div></div>
       <div id="mass-timer" class="timer"></div>
-      <button id="btn-start-auto" class="btn primary sm">자동 진행 미사 시작</button>
-      <div id="host-controls" hidden>
-        <button data-act="prev" class="btn sm">◀ 이전</button>
-        <button data-act="next" class="btn primary sm">다음 ▶</button>
-        <button data-act="silence" class="btn sm" id="btn-silence">침묵 모드</button>
-        <button data-act="reset" class="btn danger sm">종료</button>
-      </div>
       <button id="mass-collapse" class="collapse" aria-label="미사 안내 펼치기·접기">▾</button>
     </section>
 
@@ -124,19 +116,6 @@
       <button id="btn-chat" class="btn round-sm" aria-label="채팅 열기">💬</button>
     </div>
   </div>
-
-  <!-- ───── 진행자 키 입력 ───── -->
-  <dialog id="host-dialog">
-    <form method="dialog" id="host-form">
-      <h3>진행자 권한</h3>
-      <p>서버 실행 시 설정한 진행자 키를 입력하십시오.</p>
-      <input id="host-key" type="password" autocomplete="off" />
-      <menu>
-        <button value="cancel" class="btn ghost">취소</button>
-        <button value="ok" class="btn primary">확인</button>
-      </menu>
-    </form>
-  </dialog>
 
   <!-- ───── 조작 안내 ───── -->
   <dialog id="help-dialog" aria-labelledby="help-title">
@@ -184,9 +163,8 @@
         <li>신자석에 앉으면 미사 단계에 맞춰 <b>서기 · 앉기 · 무릎 꿇기</b> 자세를 자동으로 따릅니다. (상단 🧍 버튼으로 끄기)</li>
         <li>안내 패널의 <b>응답 버튼</b>(예: "아멘.")을 누르면 다른 신자들에게 말풍선으로 보입니다.</li>
         <li><b>평화의 인사</b> 순서가 되면 안내 패널에 <b>🕊 평화의 인사 나누기</b> 버튼이 나타납니다. 옆 사람 아바타를 눌러 한 사람씩 인사할 수도 있습니다.</li>
-        <li>진행자가 없으면 <b>자동 진행 미사 시작</b>으로 미사를 시작할 수 있습니다.</li>
+        <li>미사는 <b>자동으로 진행</b>됩니다. 한 대의 미사(약 5분)가 끝나면 10초 쉬고 다음 미사가 시작됩니다. 단계마다 10초 또는 20초씩 머뭅니다.</li>
         <li><b>🔊</b> 버튼에서 배경 오르간·종소리를 켜고 끄며 음량을 조절합니다. 오르간은 입당·봉헌·영성체 때 커지고, 독서·강론·축성 때는 잦아듭니다.</li>
-        <li><b>진행자</b> 버튼은 진행자 키를 받은 분만 사용합니다.</li>
       </ol>
     </div>
     <form method="dialog" class="help-foot">

@@ -115,9 +115,6 @@ input {
 .progress { height: 4px; background: rgba(255,255,255,.08); border-radius: 4px; overflow: hidden; }
 #mass-progress { height: 100%; width: 0; background: var(--gold); transition: width .4s; }
 .timer { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 1em; }
-#btn-start-auto { margin-top: 10px; width: 100%; }
-#host-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-#host-controls .btn { flex: 1 1 auto; white-space: nowrap; }
 .collapse {
   position: absolute; top: 10px; right: 10px; background: none; border: 0; color: var(--muted); cursor: pointer;
   font-size: 16px; display: none; transition: transform .2s;
@@ -135,7 +132,6 @@ input {
 #chat-log li { background: rgba(10, 8, 12, .6); padding: 5px 10px; border-radius: 8px; width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
 #chat-log li b { color: var(--gold); margin-right: 6px; }
 #chat-log li.sys { color: var(--muted); font-size: 13px; background: transparent; }
-#chat-log li.host b::after { content: " · 진행자"; font-weight: 400; font-size: 11px; color: var(--muted); }
 #chat-input { background: var(--panel); backdrop-filter: blur(8px); }
 
 .prompt {
@@ -176,7 +172,7 @@ body.touch #greet-notice { top: 160px; } /* 접힌 미사 안내 패널 아래 *
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ───── 진행자 다이얼로그 ───── */
+/* ───── 다이얼로그 공통 ───── */
 dialog {
   background: var(--panel-solid); color: var(--text); border: 1px solid var(--line); border-radius: 16px;
   padding: 20px; width: min(360px, calc(100% - 32px));

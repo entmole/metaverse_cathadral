@@ -1,8 +1,8 @@
 'use strict';
 /**
- * 미사 진행 상태 머신.
- * - 서버가 현재 단계의 단일 원본(Single Source of Truth)을 보관한다.
- * - 진행자(host)가 있으면 수동 진행, 없으면 각 단계 duration 기준 자동 진행.
+ * 미사 진행 상태 머신 (진행자 없이 자동 반복).
+ *   idle(접속자 없음) → break(휴식 10초) → running(단계별 duration 자동 진행) → 마침 후 다시 break …
+ * 서버가 현재 단계의 단일 원본(Single Source of Truth)을 보관한다.
  */
 const fs = require('fs');
 const path = require('path');
@@ -11,101 +11,80 @@ const ORDER_PATH = path.join(__dirname, '..', 'public', 'data', 'mass-order.json
 const order = JSON.parse(fs.readFileSync(ORDER_PATH, 'utf8'));
 const STEPS = order.steps;
 
+const BREAK_SEC = 10;
+// 테스트 전용 배속(기본 1). 예: MASS_SPEED=5 → 10초 단계가 2초
+const SPEED = Math.max(1, Number(process.env.MASS_SPEED) || 1);
+const ms = (sec) => (sec * 1000) / SPEED;
+
 class MassController {
   /** @param {(state:object)=>void} onChange 상태 변경 시 브로드캐스트 콜백 */
   constructor(onChange) {
     this.onChange = onChange;
-    this.stepIndex = -1;      // -1: 미사 시작 전
-    this.mode = 'idle';       // idle | auto | host
-    this.silence = false;     // 침묵 모드(채팅 제한)
-    this.stepStartedAt = 0;
+    this.mode = 'idle';     // idle | break | running
+    this.stepIndex = -1;    // -1: 미사 전(휴식 중)
+    this.phaseStartedAt = 0;
+    this.phaseMs = 0;       // 현재 단계(또는 휴식)의 길이
+    this.massCount = 0;     // 서버 시작 후 시작된 미사 횟수
     this.timer = null;
   }
 
   get steps() { return STEPS; }
 
   snapshot() {
-    const step = STEPS[this.stepIndex];
+    const elapsed = Date.now() - this.phaseStartedAt;
     return {
+      mode: this.mode,
       stepIndex: this.stepIndex,
       total: STEPS.length,
-      mode: this.mode,
-      silence: this.silence,
-      // 클라이언트 시계 오차를 피하기 위해 절대시각 대신 경과 시간(ms) 전달
-      elapsedMs: this.stepIndex >= 0 ? Date.now() - this.stepStartedAt : 0,
-      // 자동 진행일 때만 남은 시간 표시용 duration 전달
-      duration: this.mode === 'auto' && step ? step.duration : null,
+      massCount: this.massCount,
+      // 클라이언트 시계 오차를 피하기 위해 절대시각 대신 남은 시간(ms) 전달
+      leftMs: this.mode === 'idle' ? 0 : Math.max(0, this.phaseMs - elapsed),
+      phaseMs: this.phaseMs,
     };
   }
 
   /** 응답 버튼 인덱스가 현재 단계에 유효한지 검증 후 문구 반환 */
   responseText(idx) {
-    const step = STEPS[this.stepIndex];
+    const step = this.mode === 'running' ? STEPS[this.stepIndex] : null;
     if (!step || !Number.isInteger(idx)) return null;
     return step.responses[idx] ?? null;
   }
 
-  startAuto() {
-    if (this.mode !== 'idle') return false;
-    this.mode = 'auto';
-    this.goTo(0);
-    return true;
+  /** 접속자 수 변화에 맞춰 시작/정지 */
+  setOccupied(occupied) {
+    if (occupied && this.mode === 'idle') this.#startBreak();
+    else if (!occupied && this.mode !== 'idle') this.#stop();
   }
 
-  /** 진행자 연결 시 수동 모드로 전환(자동 진행 중이면 현재 단계 유지) */
-  takeHost() {
-    this.mode = 'host';
-    this.clearTimer();
-    this.emit();
-  }
-
-  /** 진행자 이탈 시: 미사 중이면 자동 진행으로 넘김 */
-  releaseHost() {
-    if (this.mode !== 'host') return;
-    if (this.stepIndex >= 0) {
-      this.mode = 'auto';
-      this.goTo(this.stepIndex);
-    } else {
-      this.mode = 'idle';
-      this.emit();
-    }
-  }
-
-  next() { return this.goTo(this.stepIndex + 1); }
-  prev() { return this.goTo(Math.max(0, this.stepIndex - 1)); }
-
-  goTo(i) {
-    this.clearTimer();
-    if (i >= STEPS.length) return this.reset();
-    this.stepIndex = i;
-    this.stepStartedAt = Date.now();
-    if (this.mode === 'auto') {
-      this.timer = setTimeout(() => this.next(), STEPS[i].duration * 1000);
-    }
-    this.emit();
-    return true;
-  }
-
-  reset() {
-    this.clearTimer();
+  #startBreak() {
+    this.mode = 'break';
     this.stepIndex = -1;
-    this.silence = false;
-    if (this.mode === 'auto') this.mode = 'idle';
-    this.emit();
-    return true;
+    this.#phase(ms(BREAK_SEC), () => { this.massCount++; this.#goTo(0); });
   }
 
-  setSilence(on) {
-    this.silence = !!on;
-    this.emit();
+  #goTo(i) {
+    if (i >= STEPS.length) return this.#startBreak(); // 마침 → 휴식 → 다음 미사
+    this.mode = 'running';
+    this.stepIndex = i;
+    this.#phase(ms(STEPS[i].duration), () => this.#goTo(i + 1));
   }
 
-  clearTimer() {
-    if (this.timer) clearTimeout(this.timer);
+  #phase(durationMs, next) {
+    clearTimeout(this.timer);
+    this.phaseStartedAt = Date.now();
+    this.phaseMs = durationMs;
+    this.timer = setTimeout(next, durationMs);
+    this.onChange(this.snapshot());
+  }
+
+  #stop() {
+    clearTimeout(this.timer);
     this.timer = null;
+    this.mode = 'idle';
+    this.stepIndex = -1;
+    this.phaseMs = 0;
+    this.onChange(this.snapshot());
   }
-
-  emit() { this.onChange(this.snapshot()); }
 }
 
-module.exports = { MassController, STEPS };
+module.exports = { MassController, STEPS, BREAK_SEC };

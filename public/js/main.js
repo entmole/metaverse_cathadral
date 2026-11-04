@@ -54,7 +54,6 @@ addEventListener('resize', () => {
 const net = new Net();
 const chat = new ChatUI(net);
 let selfId = null;
-let isHost = false;
 let selfName = '';
 let followPosture = true;
 let booths = {};
@@ -70,7 +69,6 @@ const massUI = new MassUI(net, massOrder, (step, changed) => {
   if (step && followPosture && controls.seat) controls.setPose(step.posture === 'stand' ? 'stand' : step.posture);
   if (step) chat.system(`✝ ${massOrder.parts[step.part]} — ${step.title}`);
   if (step?.id === 'peace') toast('🕊 평화의 인사를 나눌 시간입니다. 옆 사람 아바타를 눌러 인사해 보십시오.', 4000);
-  chat.setSilence(massUI.state.silence, isHost);
 });
 
 const confession = new ConfessionUI(examination, () => {
@@ -89,8 +87,6 @@ net.on('welcome', (m) => {
   for (const p of m.players) if (p.id !== selfId) avatars.add(p);
   booths = m.booths;
   for (const [id, busy] of Object.entries(booths)) world.setBoothBusy(id, busy);
-  massUI.setHost(false);
-  isHost = false;
   massUI.render(m.mass);
   setCount(m.players.length);
   $('#topbar .presence').classList.remove('offline');
@@ -104,7 +100,7 @@ net.on('respond', (m) => {
   avatars.bubble(m.id, m.text);
   if (m.id === selfId) toast(`🙏 ${m.text}`, 1500);
 });
-net.on('mass', (m) => { massUI.render(m.state); chat.setSilence(m.state.silence, isHost); });
+net.on('mass', (m) => massUI.render(m.state));
 net.on('booths', (m) => { booths = m.booths; for (const [id, busy] of Object.entries(booths)) world.setBoothBusy(id, busy); });
 net.on('boothResult', (m) => {
   if (!m.ok) return toast(m.msg || '들어갈 수 없습니다.');
@@ -112,13 +108,6 @@ net.on('boothResult', (m) => {
   controls.enabled = false;
   document.exitPointerLock?.();
   confession.open();
-});
-net.on('host', (m) => {
-  isHost = !!m.ok;
-  massUI.setHost(isHost);
-  chat.setSilence(massUI.state?.silence, isHost);
-  $('#btn-host').textContent = isHost ? '진행자 ✓' : '진행자';
-  toast(m.ok ? '진행자 권한을 받았습니다.' : m.msg);
 });
 net.on('notice', (m) => toast(m.msg));
 net.on('error', (m) => { $('#join-error').textContent = m.msg; });
@@ -217,16 +206,6 @@ $('#btn-follow').addEventListener('click', (e) => {
   btn.setAttribute('aria-pressed', String(followPosture));
   btn.querySelector('.lbl').textContent = followPosture ? ' 자세 따라하기 켬' : ' 자세 따라하기 끔';
   toast(followPosture ? '신자석에서 미사 자세를 자동으로 따릅니다.' : '자세 자동 따라하기를 껐습니다.');
-});
-const hostDialog = $('#host-dialog');
-$('#btn-host').addEventListener('click', () => {
-  document.exitPointerLock?.();
-  $('#host-key').value = '';
-  hostDialog.showModal();
-});
-hostDialog.addEventListener('close', () => {
-  if (hostDialog.returnValue === 'ok' && $('#host-key').value) net.send({ t: 'host', key: $('#host-key').value });
-  $('#host-key').value = '';
 });
 
 // ───────── 입장 ─────────

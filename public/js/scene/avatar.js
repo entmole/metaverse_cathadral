@@ -1,20 +1,17 @@
-// 다른 접속자 아바타: 생성·보간·자세·말풍선·인사 동작·선택(레이캐스트)
+// 다른 접속자 아바타: 사제복을 입은 블록형 인물
+// 생성·보간·자세(서기/앉기/무릎)·걷기·인사 동작·말풍선·선택(레이캐스트)
 import * as THREE from 'three';
-import { labelTexture } from './textures.js';
+import {
+  labelTexture, priestSkin, SKIN_LAYOUT, netFaces, hashStr, SKIN_TONES, HAIR_COLORS, VESTMENTS,
+} from './textures.js';
 
+const P = 0.056;            // 1픽셀 = 5.6cm → 키 32px ≈ 1.8m
+const HIP = 12 * P;         // 엉덩이(다리 회전축) 높이
 const POSE_FROM_CODE = ['stand', 'sit', 'kneel'];
-// 자세별 몸 전체 높이 오프셋(m)과 상체 기울기
-const POSE_SHAPE = {
-  stand: { dy: 0, tilt: 0 },
-  sit: { dy: -0.42, tilt: 0 },
-  kneel: { dy: -0.5, tilt: 0.12 },
-};
+// 자세별 몸 높이 오프셋(m)
+const POSE_DY = { stand: 0, sit: -0.06, kneel: -(HIP - 8 * P) };
 // 인사 동작: 길이(초)와 최대 숙임 각도(rad)
-const GESTURE = {
-  bow: { dur: 1.6, angle: 0.5 },
-  peace: { dur: 2.0, angle: 0.6 },
-};
-const HIP = 0.85; // 상체 회전축(엉덩이) 높이
+const GESTURE = { bow: { dur: 1.6, angle: 0.5 }, peace: { dur: 2.0, angle: 0.6 } };
 
 function makeSprite({ tex, aspect }, height) {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }));
@@ -30,63 +27,118 @@ function bowCurve(t) {
   return Math.cos(((t - 0.55) / 0.45) * Math.PI / 2);
 }
 
+/**
+ * 전개도(64×64 아틀라스)에 맞춘 UV를 가진 상자
+ * BoxGeometry 면 순서: +x, -x, +y, -y, +z, -z  /  아바타 정면 = -z
+ */
+function skinBox(part) {
+  const L = SKIN_LAYOUT[part];
+  const geo = new THREE.BoxGeometry(L.w * P, L.h * P, L.d * P);
+  const F = netFaces(L);
+  // 정면(-z)을 바라볼 때 인물의 오른쪽 = +x
+  const order = [F.right, F.left, F.top, F.bottom, F.back, F.front];
+  const uv = geo.attributes.uv;
+  order.forEach(([x, y, w, h], face) => {
+    const u0 = x / 64, u1 = (x + w) / 64, vt = 1 - y / 64, vb = 1 - (y + h) / 64;
+    const i = face * 4;
+    uv.setXY(i, u0, vt); uv.setXY(i + 1, u1, vt); uv.setXY(i + 2, u0, vb); uv.setXY(i + 3, u1, vb);
+  });
+  uv.needsUpdate = true;
+  return geo;
+}
+
+/** 회전축(pivot) 그룹 아래에 상자를 매달기: offsetY만큼 내려 위쪽 끝이 축에 오도록 */
+function hang(geo, mat, offsetY) {
+  const pivot = new THREE.Group();
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = offsetY;
+  pivot.add(mesh);
+  return pivot;
+}
+
+const lerp = (a, b, k) => a + (b - a) * k;
+
 export class AvatarManager {
   constructor(scene) {
     this.scene = scene;
     /** @type {Map<string, any>} */
     this.items = new Map();
     this.geo = {
-      robe: new THREE.CylinderGeometry(0.24, 0.32, HIP, 14),
-      chest: new THREE.CapsuleGeometry(0.24, 0.3, 4, 12),
-      head: new THREE.SphereGeometry(0.17, 16, 12),
-      stole: new THREE.BoxGeometry(0.06, 0.62, 0.02),
+      head: skinBox('head'), chasuble: skinBox('chasuble'), arm: skinBox('arm'),
+      thigh: skinBox('thigh'), shin: skinBox('shin'),
       ring: new THREE.RingGeometry(0.2, 0.32, 40),
       hitbox: new THREE.CylinderGeometry(0.5, 0.5, 1.9, 10), // 손가락으로 누르기 쉽게 넉넉한 선택 영역
     };
-    this.mat = {
-      skin: new THREE.MeshStandardMaterial({ color: 0xe6c3a0, roughness: 0.7 }),
-      stole: new THREE.MeshStandardMaterial({ color: 0xd8b25a, roughness: 0.4, metalness: 0.5 }),
-      hitbox: new THREE.MeshBasicMaterial({ visible: false }), // 화면에 그리지 않음
-    };
+    this.hitMat = new THREE.MeshBasicMaterial({ visible: false }); // 화면에 그리지 않음
     /** 평화의 인사 빛 효과(바닥 금빛 고리 + 떠오르는 빛 알갱이) */
     this.effects = [];
   }
 
+  /** 접속자마다 다른 외형(서버가 준 hue + 이름으로 결정 → 모든 화면에서 같은 모습) */
+  #look(p) {
+    const h = hashStr(p.name);
+    return {
+      skin: SKIN_TONES[h % SKIN_TONES.length],
+      hair: HAIR_COLORS[(h >>> 4) % HAIR_COLORS.length],
+      vest: VESTMENTS[Math.floor(((p.hue % 360) + 360) % 360 / 72)],
+      seed: h,
+    };
+  }
+
   add(p) {
     if (this.items.has(p.id)) return;
+    const look = this.#look(p);
+    const tex = priestSkin(look);
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
+
     const g = new THREE.Group();
-    const robeMat = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(p.hue / 360, 0.35, 0.42), roughness: 0.85 });
-    const body = new THREE.Group();          // 자세(앉기·무릎) 높이 조절
-    const lower = new THREE.Mesh(this.geo.robe, robeMat);
-    lower.position.y = HIP / 2;
-    const upper = new THREE.Group();         // 엉덩이 축으로 숙이는 상체
-    upper.position.y = HIP;
-    const chest = new THREE.Mesh(this.geo.chest, robeMat);
-    chest.position.y = 0.38;
-    const head = new THREE.Mesh(this.geo.head, this.mat.skin);
-    head.position.y = 0.82;
-    // 앞면 영대(금색 띠): 바라보는 방향(-Z) 표시
-    const stoleL = new THREE.Mesh(this.geo.stole, this.mat.stole);
-    const stoleR = stoleL.clone();
-    stoleL.position.set(-0.09, 0.38, -0.235);
-    stoleR.position.set(0.09, 0.38, -0.235);
-    upper.add(chest, head, stoleL, stoleR);
-    const hitbox = new THREE.Mesh(this.geo.hitbox, this.mat.hitbox);
-    hitbox.position.y = 0.95;
-    body.add(lower, upper, hitbox);
+    const body = new THREE.Group();               // 자세 높이
     g.add(body);
+
+    // 다리: 허벅지(엉덩이 축) → 정강이(무릎 축)
+    const legs = [-1, 1].map((side) => {
+      const thigh = hang(this.geo.thigh, mat, -3 * P);
+      thigh.position.set(side * 2 * P, HIP, 0);
+      const knee = hang(this.geo.shin, mat, -3 * P);
+      knee.position.y = -6 * P;
+      thigh.add(knee);
+      body.add(thigh);
+      return { thigh, knee };
+    });
+
+    // 상체(엉덩이 축으로 숙임): 제의(몸통) + 머리 + 팔
+    const upper = new THREE.Group();
+    upper.position.y = HIP;
+    const chasuble = new THREE.Mesh(this.geo.chasuble, mat);
+    chasuble.position.y = 4 * P;                  // 어깨(12px)~엉덩이 아래 4px
+    const head = new THREE.Mesh(this.geo.head, mat);
+    head.position.y = 16 * P;
+    const arms = [-1, 1].map((side) => {
+      const arm = hang(this.geo.arm, mat, -5 * P);
+      arm.position.set(side * 6.5 * P, 11 * P, 0); // 어깨 축
+      upper.add(arm);
+      return arm;
+    });
+    upper.add(chasuble, head);
+    body.add(upper);
+
+    const hitbox = new THREE.Mesh(this.geo.hitbox, this.hitMat);
+    hitbox.position.y = 0.95;
+    hitbox.userData.avatarId = p.id;
+    body.add(hitbox);
+
     const label = makeSprite(labelTexture(p.name, { font: 26 }), 0.22);
-    label.position.y = 1.95;
+    label.position.y = 2.05;
     g.add(label);
+
     g.position.set(p.x, p.y, p.z);
     g.rotation.y = p.ry;
     g.visible = !p.hidden;
-    // 선택(레이캐스트)용 표시
-    hitbox.userData.avatarId = p.id;
     this.scene.add(g);
     this.items.set(p.id, {
-      g, body, upper, label, robeMat, name: p.name, picks: [hitbox],
+      g, body, upper, legs, arms, label, mat, tex, name: p.name, vest: look.vest.name, picks: [hitbox],
       target: new THREE.Vector3(p.x, p.y, p.z), ry: p.ry, pose: p.pose,
+      last: new THREE.Vector3(p.x, p.y, p.z), speed: 0, walk: 0,
       bubble: null, bubbleUntil: 0,
       gesture: null, gestureStart: 0,
     });
@@ -96,7 +148,7 @@ export class AvatarManager {
     const it = this.items.get(id);
     if (!it) return;
     this.scene.remove(it.g);
-    it.robeMat.dispose();
+    it.mat.dispose(); it.tex.dispose();
     it.label.material.map.dispose(); it.label.material.dispose();
     if (it.bubble) { it.bubble.material.map.dispose(); it.bubble.material.dispose(); }
     this.items.delete(id);
@@ -124,7 +176,7 @@ export class AvatarManager {
     if (!it) return;
     if (it.bubble) { it.g.remove(it.bubble); it.bubble.material.map.dispose(); it.bubble.material.dispose(); }
     it.bubble = makeSprite(labelTexture(text, { font: 30, color: '#2a1d0a', bg: 'rgba(246,226,176,.95)' }), 0.28);
-    it.bubble.position.y = 2.3;
+    it.bubble.position.y = 2.38;
     it.g.add(it.bubble);
     it.bubbleUntil = performance.now() + 4000;
   }
@@ -160,7 +212,7 @@ export class AvatarManager {
     this.effects.push({ ring, sparks, start: performance.now() });
   }
 
-  /** 레이캐스터로 아바타 선택 → id 또는 null */
+  /** 레이캐스터로 아바타 선택 → {id, distance} 또는 null */
   pick(raycaster, maxDist = 30) {
     const meshes = [];
     for (const it of this.items.values()) if (it.g.visible) meshes.push(...it.picks);
@@ -175,6 +227,7 @@ export class AvatarManager {
 
   update(dt) {
     const k = Math.min(1, dt * 10);
+    const kp = Math.min(1, dt * 8); // 팔다리 자세 전환 속도
     const now = performance.now();
     for (const it of this.items.values()) {
       it.g.position.lerp(it.target, k);
@@ -182,9 +235,16 @@ export class AvatarManager {
       let d = it.ry - it.g.rotation.y;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       it.g.rotation.y += d * k;
-      const shape = POSE_SHAPE[it.pose];
-      it.body.position.y += (shape.dy - it.body.position.y) * k;
-      // 상체: 자세 기울기 + 인사 동작(음수 = 앞(-Z)으로 숙임)
+
+      // 실제 움직인 속도 → 걷기 동작
+      const moved = it.g.position.distanceTo(it.last) / Math.max(dt, 1e-3);
+      it.last.copy(it.g.position);
+      it.speed = lerp(it.speed, moved, Math.min(1, dt * 6));
+      const walking = it.pose === 'stand' && it.speed > 0.25;
+      it.walk += dt * Math.min(it.speed, 4) * 4;
+      const swing = walking ? Math.sin(it.walk) * Math.min(1, it.speed / 2) * 0.7 : 0;
+
+      // 인사 동작 진행
       let bow = 0;
       if (it.gesture) {
         const G = GESTURE[it.gesture];
@@ -192,8 +252,32 @@ export class AvatarManager {
         bow = bowCurve(t) * G.angle;
         if (t >= 1) it.gesture = null;
       }
-      const targetTilt = -shape.tilt;
-      it.upper.rotation.x = it.gesture ? targetTilt - bow : it.upper.rotation.x + (targetTilt - it.upper.rotation.x) * k;
+      const praying = !!it.gesture || it.pose === 'kneel'; // 두 손 모음
+
+      // 몸 높이(자세)
+      it.body.position.y = lerp(it.body.position.y, POSE_DY[it.pose] ?? 0, k);
+
+      // 다리: +x 회전 = 아래쪽 끝이 앞(-z)으로
+      const legT = { stand: [0, 0], sit: [Math.PI / 2, -Math.PI / 2], kneel: [0, -Math.PI / 2] }[it.pose] ?? [0, 0];
+      it.legs.forEach(({ thigh, knee }, i) => {
+        const s = i === 0 ? swing : -swing;
+        thigh.rotation.x = lerp(thigh.rotation.x, legT[0] + s, kp);
+        knee.rotation.x = lerp(knee.rotation.x, legT[1], kp);
+      });
+
+      // 팔: 걸을 때 다리와 반대로, 기도·인사 땐 가슴 앞에 모음
+      it.arms.forEach((arm, i) => {
+        const side = i === 0 ? -1 : 1; // -x(왼팔) / +x(오른팔)
+        const tx = praying ? 1.05 : (i === 0 ? -swing : swing) * 0.8;
+        const tz = praying ? -side * 0.42 : 0;
+        arm.rotation.x = lerp(arm.rotation.x, tx, kp);
+        arm.rotation.z = lerp(arm.rotation.z, tz, kp);
+      });
+
+      // 상체: 무릎 꿇을 때 살짝 숙임 + 인사(음수 = 앞으로 숙임)
+      const tilt = it.pose === 'kneel' ? -0.12 : 0;
+      it.upper.rotation.x = it.gesture ? tilt - bow : lerp(it.upper.rotation.x, tilt, k);
+
       if (it.bubble && now > it.bubbleUntil) {
         const m = it.bubble.material;
         m.opacity -= dt * 2;

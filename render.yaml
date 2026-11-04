@@ -12,6 +12,3 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # 진행자 키: Render가 임의 값을 생성 → 대시보드 Environment 탭에서 확인
-      - key: MASS_HOST_KEY
-        generateValue: true

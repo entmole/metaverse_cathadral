@@ -1,4 +1,4 @@
-// 미사 진행 HUD: 서버 상태를 받아 단계·응답 버튼·진행률·진행자 제어 표시
+// 미사 진행 HUD: 서버의 자동 진행 상태(휴식·단계)를 받아 안내·응답 버튼·남은 시간 표시
 import { $, h } from './dom.js';
 
 const POSTURE_LABEL = { stand: '🧍 일어섭니다', sit: '🪑 앉습니다', kneel: '🙏 무릎을 꿇습니다' };
@@ -14,58 +14,40 @@ export class MassUI {
     this.order = order;
     this.onStep = onStep;
     this.state = null;
-    this.isHost = false;
+    this.phaseEndsAt = 0; // 로컬 시계 기준 현재 단계(또는 휴식) 종료 시각
     this.el = {
       panel: $('#mass-panel'), part: $('#mass-part'), mode: $('#mass-mode'), title: $('#mass-title'),
       desc: $('#mass-desc'), posture: $('#mass-posture'), responses: $('#mass-responses'),
-      progress: $('#mass-progress'), timer: $('#mass-timer'), startAuto: $('#btn-start-auto'),
-      host: $('#host-controls'), silence: $('#btn-silence'),
+      progress: $('#mass-progress'), timer: $('#mass-timer'),
     };
-    this.el.startAuto.addEventListener('click', () => net.send({ t: 'mass', action: 'startAuto' }));
-    this.el.host.addEventListener('click', (e) => {
-      const act = e.target.closest('button')?.dataset.act;
-      if (!act) return;
-      if (act === 'reset' && !confirm('미사 진행을 종료하시겠습니까?')) return;
-      net.send({ t: 'mass', action: act });
-    });
     $('#mass-collapse').addEventListener('click', () => this.el.panel.classList.toggle('collapsed'));
-    setInterval(() => this.#tick(), 500);
-  }
-
-  setHost(on) {
-    this.isHost = on;
-    this.el.host.hidden = !on;
-    if (this.state) this.render(this.state);
+    setInterval(() => this.#tick(), 250);
   }
 
   get currentStep() {
-    return this.state ? this.order.steps[this.state.stepIndex] ?? null : null;
+    const s = this.state;
+    return s?.mode === 'running' ? this.order.steps[s.stepIndex] ?? null : null;
   }
 
   render(state) {
-    const prevIndex = this.state?.stepIndex;
+    const prevKey = this.state && `${this.state.massCount}:${this.state.stepIndex}`;
     this.state = state;
-    this.localStart = Date.now() - (state.elapsedMs || 0);
+    this.phaseEndsAt = Date.now() + (state.leftMs || 0);
     const step = this.currentStep;
     const E = this.el;
 
-    E.startAuto.hidden = state.mode !== 'idle' || this.isHost;
-    E.silence.textContent = state.silence ? '침묵 해제' : '침묵 모드';
-    E.silence.setAttribute('aria-pressed', String(state.silence));
-    E.mode.textContent = { idle: '', auto: '자동 진행', host: '진행자 진행' }[state.mode] + (state.silence ? ' · 🤫 침묵' : '');
-
     if (!step) {
+      // 휴식(다음 미사 대기)
       E.part.textContent = '미사 전';
-      E.title.textContent = '미사를 기다리는 중';
-      E.desc.textContent = this.isHost
-        ? '「다음 ▶」을 누르면 입당부터 미사가 시작됩니다.'
-        : '진행자가 미사를 시작하거나, 아래 버튼으로 자동 진행 미사를 시작할 수 있습니다.';
+      E.mode.textContent = state.massCount > 0 ? `${state.massCount}번째 미사를 마쳤습니다` : '';
+      E.title.textContent = '곧 미사가 시작됩니다';
+      E.desc.textContent = '잠시 마음을 가다듬으십시오. 입당 성가와 함께 미사가 자동으로 시작됩니다.';
       E.posture.textContent = '';
       E.responses.replaceChildren();
       E.progress.style.width = '0%';
-      E.timer.textContent = this.order.notice;
     } else {
       E.part.textContent = this.order.parts[step.part];
+      E.mode.textContent = `${state.massCount}번째 미사 · 자동 진행`;
       E.title.textContent = step.title;
       E.desc.textContent = step.desc;
       E.posture.textContent = POSTURE_LABEL[step.posture] || '';
@@ -76,19 +58,19 @@ export class MassUI {
       E.progress.style.width = `${((state.stepIndex + 1) / state.total) * 100}%`;
     }
     this.#tick();
-    this.onStep(step, prevIndex !== state.stepIndex);
+    this.onStep(step, prevKey !== `${state.massCount}:${state.stepIndex}`);
   }
 
   #tick() {
     const s = this.state;
-    const step = this.currentStep;
-    if (!s || !step) return;
-    const label = `${s.stepIndex + 1} / ${s.total}`;
-    if (s.mode === 'auto' && s.duration) {
-      const left = Math.max(0, Math.ceil(s.duration - (Date.now() - this.localStart) / 1000));
-      this.el.timer.textContent = `${label} · 다음 단계까지 ${left}초`;
+    if (!s) return;
+    const left = Math.max(0, Math.ceil((this.phaseEndsAt - Date.now()) / 1000));
+    if (s.mode === 'break') {
+      this.el.timer.textContent = `다음 미사까지 ${left}초 · ${this.order.notice}`;
+    } else if (s.mode === 'running') {
+      this.el.timer.textContent = `${s.stepIndex + 1} / ${s.total} · 다음 단계까지 ${left}초`;
     } else {
-      this.el.timer.textContent = label;
+      this.el.timer.textContent = this.order.notice;
     }
   }
 }

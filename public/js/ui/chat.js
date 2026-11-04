@@ -27,18 +27,12 @@ export class ChatUI {
     });
   }
 
-  add({ name, text, host }) {
-    this.#push(h('li', { class: host ? 'host' : '' }, h('b', {}, name), text));
+  add({ name, text }) {
+    this.#push(h('li', {}, h('b', {}, name), text));
   }
 
   system(text) {
     this.#push(h('li', { class: 'sys' }, text));
-  }
-
-  setSilence(on, isHost) {
-    const locked = on && !isHost;
-    this.input.disabled = locked;
-    this.input.placeholder = locked ? '🤫 침묵 중입니다' : 'Enter로 채팅 (최대 200자)';
   }
 
   #push(li) {
