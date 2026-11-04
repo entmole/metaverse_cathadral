@@ -28,6 +28,9 @@ export class PlayerControls {
     this.lookJoy = { x: 0, y: 0 };  // 시점 스틱 (-1~1)
     this.eye = EYE.stand;
     this.onInteract = null;   // E키 콜백
+    this.onPick = null;       // (screenPoint|null) => boolean : 아바타를 눌렀으면 true
+    this.onKey = null;        // 기타 단축키 콜백 (code) => void
+    this.nodStart = -1;       // 내가 인사할 때 시선을 살짝 숙이는 연출
     this.onLeaveSeat = null;
     this.#bind();
   }
@@ -41,14 +44,20 @@ export class PlayerControls {
       const k = e.code;
       this.keys.add(k);
       if (k === 'KeyE') this.onInteract?.();
+      else this.onKey?.(k);
       if (this.seat && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) this.leaveSeat();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
 
-    // 데스크톱: 클릭 시 포인터락
-    this.dom.addEventListener('click', () => {
-      if (this.enabled && !document.body.classList.contains('touch') && matchMedia('(pointer: fine)').matches && !this.isLocked) this.dom.requestPointerLock?.();
+    // 데스크톱: 클릭 → 아바타 선택(잠금 중이면 화면 중앙 조준점 기준), 아니면 포인터락
+    this.dom.addEventListener('click', (e) => {
+      if (!this.enabled || document.body.classList.contains('touch')) return; // 터치는 아래 탭 감지로 처리
+      if (this.onPick?.(this.isLocked ? null : { x: e.clientX, y: e.clientY })) {
+        document.exitPointerLock?.();
+        return;
+      }
+      if (matchMedia('(pointer: fine)').matches && !this.isLocked) this.dom.requestPointerLock?.();
     });
     document.addEventListener('pointerlockchange', () => document.body.classList.toggle('locked', this.isLocked));
     document.addEventListener('mousemove', (e) => {
@@ -58,7 +67,18 @@ export class PlayerControls {
 
     // 모바일: 캔버스 드래그로 시점 회전
     let last = null;
-    this.dom.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') last = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+    let tap = null; // 짧게 톡 누름(아바타 선택) 판별용
+    this.dom.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      last = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      tap = { x: e.clientX, y: e.clientY, id: e.pointerId, t: performance.now() };
+    });
+    this.dom.addEventListener('pointerup', (e) => {
+      if (!tap || e.pointerId !== tap.id) return;
+      const moved = Math.hypot(e.clientX - tap.x, e.clientY - tap.y);
+      if (this.enabled && moved < 12 && performance.now() - tap.t < 500) this.onPick?.({ x: e.clientX, y: e.clientY });
+      tap = null;
+    });
     this.dom.addEventListener('pointermove', (e) => {
       if (!last || e.pointerId !== last.id || !this.enabled) return;
       this.#look(e.clientX - last.x, e.clientY - last.y, 0.005);
@@ -150,6 +170,9 @@ export class PlayerControls {
 
   setPose(pose) { if (EYE[pose]) this.pose = pose; }
 
+  /** 내 인사 동작: 1.2초 동안 시선을 숙였다 듦 */
+  nod() { this.nodStart = performance.now(); }
+
   #blocked(x, z) {
     if (x < WORLD.minX || x > WORLD.maxX || z < WORLD.minZ || z > WORLD.maxZ) return true;
     for (const c of this.colliders) {
@@ -188,6 +211,11 @@ export class PlayerControls {
     }
     this.eye += (EYE[this.pose] - this.eye) * Math.min(1, dt * 6);
     this.camera.position.set(this.pos.x, this.eye, this.pos.z);
-    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+    let nod = 0;
+    if (this.nodStart >= 0) {
+      const t = (performance.now() - this.nodStart) / 1200;
+      if (t >= 1) this.nodStart = -1; else nod = Math.sin(t * Math.PI) * 0.35;
+    }
+    this.camera.rotation.set(this.pitch - nod, this.yaw, 0, 'YXZ');
   }
 }

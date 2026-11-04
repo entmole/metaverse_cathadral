@@ -10,18 +10,21 @@ const LIMITS = {
   CHAT_MAX: 200,
   CHAT_INTERVAL_MS: 1000,   // 채팅 최소 간격
   RESPOND_INTERVAL_MS: 1500,
+  GESTURE_INTERVAL_MS: 1500, // 인사 동작 최소 간격
+  GREET_DISTANCE: 7,         // 인사 가능 거리(m, 클라이언트 6m + 지연 여유)
   MOVE_INTERVAL_MS: 40,     // 이동 패킷 최대 25Hz
   WORLD: { minX: -11.4, maxX: 11.4, minZ: -27, maxZ: 29 },
 };
 
 const POSES = new Set(['stand', 'sit', 'kneel']);
 const BOOTH_IDS = ['booth-left', 'booth-right'];
+const GESTURES = new Set(['peace', 'bow']); // 평화의 인사 / 개별 인사
 
 /** 제어문자 제거 + 공백 정리 + 길이 제한 */
 function cleanText(raw, max) {
   if (typeof raw !== 'string') return '';
   return raw
-    .replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮]/g, '')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);
@@ -50,7 +53,7 @@ class Room {
       x: (Math.random() - 0.5) * 3, y: 0, z: 26, ry: 0,
       pose: 'stand',
       inBooth: null,
-      lastMove: 0, lastChat: 0, lastRespond: 0,
+      lastMove: 0, lastChat: 0, lastRespond: 0, lastGesture: 0,
     };
     this.players.set(id, player);
     return player;
@@ -92,6 +95,32 @@ class Room {
     this.booths.set(p.inBooth, null);
     p.inBooth = null;
     return true;
+  }
+
+  /**
+   * 인사 동작 검증. 문구는 클라이언트가 동작 종류로 만들므로 임의 문구를 보낼 수 없다.
+   * @returns {{ok:true, msg:object} | {ok:false, reason?:string}}
+   */
+  gesture(id, msg) {
+    const p = this.players.get(id);
+    if (!p || p.inBooth) return { ok: false };
+    if (!GESTURES.has(msg.kind)) return { ok: false };
+    const now = Date.now();
+    if (now - p.lastGesture < LIMITS.GESTURE_INTERVAL_MS) return { ok: false };
+    const out = { t: 'gesture', id, kind: msg.kind };
+    if (msg.to != null) {
+      const target = this.players.get(String(msg.to));
+      if (!target || target.id === id || target.inBooth) return { ok: false };
+      if (Math.hypot(target.x - p.x, target.z - p.z) > LIMITS.GREET_DISTANCE) {
+        return { ok: false, reason: '조금 더 가까이 가서 인사해 주십시오.' };
+      }
+      out.to = target.id;
+      out.reply = msg.reply === true;
+    } else if (msg.kind === 'bow') {
+      return { ok: false }; // 개별 인사는 대상이 필요
+    }
+    p.lastGesture = now;
+    return { ok: true, msg: out };
   }
 
   /** 클라이언트 공개용: 누가 들어있는지는 숨기고 점유 여부만 전달 */

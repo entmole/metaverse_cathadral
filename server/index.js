@@ -111,6 +111,13 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'gesture': {
+        const r = room.gesture(me.id, msg);
+        if (r.ok) broadcast(r.msg);
+        else if (r.reason) send(ws, { t: 'notice', msg: r.reason });
+        break;
+      }
+
       case 'host': {
         if (!safeEqual(msg.key, HOST_KEY)) return send(ws, { t: 'host', ok: false, msg: '진행자 키가 올바르지 않습니다.' });
         const prev = hostId && sockets.get(hostId);

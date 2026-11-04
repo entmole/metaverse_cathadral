@@ -100,7 +100,8 @@ input {
   background: var(--panel); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px 16px 16px;
 }
-#mass-panel.collapsed > :not(.mass-head):not(h2):not(.collapse):not(.progress):not(.responses) { display: none !important; }
+#mass-panel.collapsed > :not(.mass-head):not(h2):not(.collapse):not(.progress):not(.responses):not(#btn-peace-step) { display: none !important; }
+#btn-peace-step { width: 100%; margin-bottom: 10px; }
 #mass-panel.collapsed h2 { font-size: 16px; margin: 6px 0; }
 #mass-panel:not(.collapsed) .collapse { transform: rotate(180deg); } /* 접힘 ▾(펼치기) / 펼침 ▴(접기) */
 .mass-head { display: flex; justify-content: space-between; align-items: center; }
@@ -146,6 +147,27 @@ input {
 .stick, #touch-actions, .only-touch { display: none; }
 body.touch .only-desktop { display: none; }
 body.touch .only-touch { display: block; }
+
+/* 인사 카드 · 인사 알림 */
+#avatar-card, #greet-notice {
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 4;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 16px 40px rgba(0,0,0,.5);
+}
+#avatar-card { bottom: 24%; width: min(320px, calc(100% - 32px)); padding: 12px 14px 14px; }
+.ac-head { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.ac-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.ac-x { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; padding: 4px 6px; }
+.ac-note { margin: 6px 0 10px; font-size: 13px; color: var(--muted); min-height: 1em; }
+.ac-actions { display: flex; gap: 8px; }
+.ac-actions .btn { flex: 1; padding: 10px 8px; font-size: 14px; }
+.ac-actions .btn:disabled { opacity: .45; cursor: not-allowed; }
+#greet-notice { top: 116px; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; font-size: 14px; max-width: calc(100% - 32px); }
+#greet-notice[hidden] { display: none; }
+#greet-notice { animation: pop .25s ease-out; }
+@keyframes pop { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+body.touch #avatar-card { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 160px); }
+body.touch #greet-notice { top: 160px; } /* 접힌 미사 안내 패널 아래 */
 
 #toast {
   position: fixed; left: 50%; top: 64px; transform: translate(-50%, -10px); opacity: 0; z-index: 40;
@@ -282,6 +304,7 @@ body.touch .prompt { bottom: auto; top: calc(50% + 36px); white-space: normal; t
 .ph-stick.left { left: 12px; } .ph-stick.right { right: 12px; }
 .ph-btn { right: 12px; bottom: 68px; padding: 3px 8px; border-radius: 999px; background: var(--gold); }
 .ph-chat { right: 82px; bottom: 70px; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.15); }
+.ph-peace { right: 110px; bottom: 70px; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.15); }
 
 @media (max-width: 640px) {
   #mass-panel { top: 52px; left: 16px; right: 16px; width: auto; padding: 12px 14px; }

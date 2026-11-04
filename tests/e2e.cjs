@@ -137,6 +137,66 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     check('A 퇴장 후 B 입장 가능', true);
     await B.page.click('#conf-close');
 
+    console.log('6-1) 인사·평화의 인사');
+    const place = (P, x, z, yaw) => P.page.evaluate(([x, z, yaw]) => { const c = window.__cathedral.controls; c.pos.set(x, 0, z); c.yaw = yaw; c.pitch = 0; }, [x, z, yaw]);
+    const otherOf = (P) => P.page.evaluate(() => [...window.__cathedral.avatars.items.values()][0]?.gesture ?? null);
+    await place(A, 0, 12, 0);
+    await place(B, 0, 10, Math.PI);
+    await A.page.waitForFunction(() => Math.abs([...window.__cathedral.avatars.items.values()][0].g.position.z - 10) < 0.05, null, { timeout: 15000 });
+    const vp = A.page.viewportSize();
+    check('A가 화면 속 B 아바타를 눌러 인사 카드 열기', await A.page.evaluate(([x, y]) => window.__cathedral.greet.pickAt({ x, y }), [vp.width / 2, vp.height / 2 - 10]));
+    check('인사 카드에 B 이름 표시', (await A.page.textContent('#ac-name')) === '마리아');
+    await A.page.click('#ac-bow');
+    await B.page.waitForSelector('#greet-notice:not([hidden])', { timeout: 5000 });
+    check('B에게 인사 알림', (await B.page.textContent('#gn-text')).includes('요셉 님이 인사했습니다'));
+    check('B 화면에서 A가 고개 숙임', (await otherOf(B)) === 'bow');
+    await B.page.click('#gn-reply');
+    await A.page.waitForSelector('#greet-notice:not([hidden])', { timeout: 5000 });
+    check('B의 답례가 A에게 도착', (await A.page.textContent('#gn-text')).includes('마리아 님이 답례했습니다'));
+    check('답례에는 다시 답례 버튼 없음(무한 반복 방지)', await A.page.isHidden('#gn-reply'));
+
+    await wait(1700); // 서버 연속 인사 제한(1.5초)
+    await place(B, 0, 25, Math.PI);
+    await A.page.waitForFunction(() => Math.abs([...window.__cathedral.avatars.items.values()][0].target.z - 25) < 0.1, null, { timeout: 15000 });
+    await A.page.evaluate(() => window.__cathedral.greet.openCard([...window.__cathedral.avatars.items.keys()][0]));
+    check('멀리 있는 사람은 인사 버튼 비활성화', await A.page.isDisabled('#ac-bow'));
+    await A.page.click('#ac-close');
+    const bId = await A.page.evaluate(() => [...window.__cathedral.avatars.items.keys()][0]);
+    const selfIdA = await B.page.evaluate(() => [...window.__cathedral.avatars.items.keys()][0]);
+    await B.page.evaluate(() => document.querySelector('#greet-notice').hidden = true);
+    await A.page.evaluate((to) => {
+      const n = window.__cathedral.net;
+      n.send({ t: 'gesture', kind: 'bow', to });          // 거리 초과
+      n.send({ t: 'gesture', kind: 'dance', to });        // 없는 동작
+    }, bId);
+    await wait(800);
+    check('서버가 거리 초과 인사를 거부', await B.page.isHidden('#greet-notice'));
+    await wait(1700);
+    await A.page.evaluate((me) => window.__cathedral.net.send({ t: 'gesture', kind: 'bow', to: me }), selfIdA);
+    await A.page.evaluate(() => window.__cathedral.net.send({ t: 'gesture', kind: 'bow' })); // 대상 없는 개별 인사
+    await wait(800);
+    check('자기 자신·대상 없는 개별 인사 거부', (await otherOf(B)) === null);
+
+    await place(B, 0, 10, Math.PI);
+    await wait(1700);
+    await B.page.keyboard.press('KeyF');
+    await A.page.waitForFunction(() => [...window.__cathedral.avatars.items.values()][0].gesture === 'peace', null, { timeout: 5000 }).catch(() => {});
+    check('F키 평화의 인사가 A 화면에 보임', (await otherOf(A)) === 'peace');
+    // 진행자가 '평화의 인사' 단계로 이동 → 패널에 버튼 표시
+    await A.page.evaluate(async () => {
+      const ui = window.__cathedral.massUI;
+      while (ui.order.steps[ui.state.stepIndex]?.id !== 'peace') {
+        window.__cathedral.net.send({ t: 'mass', action: 'next' });
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    });
+    await B.page.waitForSelector('#btn-peace-step:not([hidden])', { timeout: 5000 }).catch(() => {});
+    check('평화의 인사 단계에 🕊 버튼 표시', await B.page.isVisible('#btn-peace-step'));
+    await wait(1700);
+    await B.page.click('#btn-peace-step');
+    await A.page.waitForFunction(() => [...window.__cathedral.avatars.items.values()][0].gesture === 'peace', null, { timeout: 5000 }).catch(() => {});
+    check('🕊 버튼으로 평화의 인사', (await otherOf(A)) === 'peace');
+
     console.log('7) 스마트폰 조이스틱·조작 안내');
     const mctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const M = await mctx.newPage();
@@ -191,6 +251,16 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     await M.tap('#btn-interact');
     await wait(200);
     check('🧍 일어서기 버튼으로 일어남', await M.evaluate(() => !window.__cathedral.controls.seat));
+
+    // A(요셉) 앞에 서서 아바타를 톡 누르기
+    await A.page.evaluate(() => { const c = window.__cathedral.controls; c.pos.set(0, 0, 10); c.yaw = Math.PI; });
+    await M.evaluate(() => { const c = window.__cathedral.controls; c.pos.set(0, 0, 12); c.yaw = 0; c.pitch = 0; });
+    await M.waitForFunction(() => [...window.__cathedral.avatars.items.values()].some((it) => it.name === '요셉' && Math.abs(it.g.position.z - 10) < 0.05), null, { timeout: 15000 });
+    await M.touchscreen.tap(195, 410);
+    await M.waitForSelector('#avatar-card:not([hidden])', { timeout: 5000 }).catch(() => {});
+    check('스마트폰: 아바타를 톡 눌러 인사 카드 열기', (await M.isVisible('#avatar-card')) && (await M.textContent('#ac-name')) === '요셉');
+    await M.tap('#ac-close');
+    check('스마트폰: 🕊 평화의 인사 버튼 표시', await M.isVisible('#btn-peace'));
 
     await M.tap('#btn-chat');
     check('💬 버튼으로 채팅 입력창 열림', await M.isVisible('#chat-input'));

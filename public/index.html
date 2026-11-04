@@ -74,6 +74,7 @@
       <p id="mass-desc">진행자가 미사를 시작하거나, 아래 버튼으로 자동 진행 미사를 시작할 수 있습니다.</p>
       <div id="mass-posture" class="posture"></div>
       <div id="mass-responses" class="responses"></div>
+      <button id="btn-peace-step" class="btn primary sm" hidden>🕊 평화의 인사 나누기</button>
       <div class="progress"><div id="mass-progress"></div></div>
       <div id="mass-timer" class="timer"></div>
       <button id="btn-start-auto" class="btn primary sm">자동 진행 미사 시작</button>
@@ -94,11 +95,32 @@
     </section>
 
     <div id="prompt" class="prompt" hidden></div>
+
+    <!-- 아바타를 눌렀을 때: 인사 카드 -->
+    <section id="avatar-card" hidden aria-live="polite">
+      <div class="ac-head">
+        <span class="ac-dot" aria-hidden="true"></span>
+        <b id="ac-name"></b>
+        <button id="ac-close" class="ac-x" aria-label="닫기">✕</button>
+      </div>
+      <p id="ac-note" class="ac-note"></p>
+      <div class="ac-actions">
+        <button id="ac-bow" class="btn primary">🙇 인사하기</button>
+        <button id="ac-peace" class="btn">🕊 평화를 빕니다</button>
+      </div>
+    </section>
+
+    <!-- 다른 사람이 나에게 인사했을 때 -->
+    <section id="greet-notice" hidden role="status">
+      <span id="gn-text"></span>
+      <button id="gn-reply" class="btn primary sm">답례하기</button>
+    </section>
     <!-- 터치 조작: 왼쪽 이동 / 오른쪽 시점 조이스틱 + 동작 버튼 -->
     <div id="stick-move" class="stick" aria-hidden="true"><span class="stick-label">이동</span><div class="knob"></div></div>
     <div id="stick-look" class="stick" aria-hidden="true"><span class="stick-label">둘러보기</span><div class="knob"></div></div>
     <div id="touch-actions">
       <button id="btn-interact" class="btn primary" hidden>E</button>
+      <button id="btn-peace" class="btn round-sm" aria-label="평화의 인사">🕊</button>
       <button id="btn-chat" class="btn round-sm" aria-label="채팅 열기">💬</button>
     </div>
   </div>
@@ -128,6 +150,7 @@
     <div class="help-body">
       <section data-panel="touch" role="tabpanel">
         <div class="phone" aria-hidden="true">
+          <div class="ph-peace">🕊</div>
           <div class="ph-top">미사 안내 (▾ 탭하여 펼치기)</div>
           <div class="ph-btn">🪑 앉기</div>
           <div class="ph-chat">💬</div>
@@ -139,6 +162,8 @@
           <tr><th>둘러보기</th><td><b>오른쪽 아래 조이스틱</b>을 밀거나, 빈 화면을 손가락으로 끌어 시선을 돌립니다.</td></tr>
           <tr><th>앉기 · 일어서기</th><td>신자석 가까이 가면 <b>🪑 앉기</b> 버튼이 나타납니다. 일어설 때는 <b>🧍 일어서기</b>를 누르거나 왼쪽 조이스틱을 밉니다.</td></tr>
           <tr><th>고해 준비</th><td>양쪽 벽의 고해소 앞에서 <b>✝ 고해 준비</b>를 누릅니다. 초록 등은 비어 있음, 빨간 등은 사용 중입니다.</td></tr>
+          <tr><th>인사하기</th><td>다른 사람의 <b>아바타를 톡 누르면</b> 인사 카드가 열립니다. <b>🙇 인사하기</b> 또는 <b>🕊 평화를 빕니다</b>를 누르면 상대에게 알림이 가고, 상대는 <b>답례하기</b>로 응답할 수 있습니다. (6m 이내)</td></tr>
+          <tr><th>평화의 인사</th><td>오른쪽 <b>🕊</b> 버튼을 누르면 고개 숙여 주변 모두에게 "평화를 빕니다" 인사를 합니다.</td></tr>
           <tr><th>채팅</th><td>오른쪽 <b>💬</b> 버튼을 누르면 입력창이 열립니다.</td></tr>
           <tr><th>미사 안내</th><td>위쪽 안내 패널의 <b>▾</b>를 눌러 펼치거나 접습니다.</td></tr>
         </table>
@@ -148,6 +173,8 @@
           <tr><th><kbd>W A S D</kbd> · <kbd>방향키</kbd></th><td>이동</td></tr>
           <tr><th><kbd>마우스</kbd></th><td>화면을 한 번 클릭한 뒤 마우스를 움직여 둘러봅니다.</td></tr>
           <tr><th><kbd>E</kbd></th><td>신자석에 앉기 · 일어서기 · 고해소 들어가기 (화면 가운데 안내가 보일 때)</td></tr>
+          <tr><th><kbd>클릭</kbd></th><td>다른 사람의 아바타를 클릭(마우스가 잠긴 상태면 가운데 조준점을 아바타에 맞추고 클릭)하면 인사 카드가 열립니다.</td></tr>
+          <tr><th><kbd>F</kbd></th><td>평화의 인사: 고개 숙여 주변 모두에게 "평화를 빕니다"</td></tr>
           <tr><th><kbd>Enter</kbd></th><td>채팅 입력 시작 / 보내기</td></tr>
           <tr><th><kbd>Esc</kbd></th><td>마우스 해제 · 창 닫기 · 고해소 나가기</td></tr>
         </table>
@@ -156,6 +183,7 @@
       <ol class="help-steps">
         <li>신자석에 앉으면 미사 단계에 맞춰 <b>서기 · 앉기 · 무릎 꿇기</b> 자세를 자동으로 따릅니다. (상단 🧍 버튼으로 끄기)</li>
         <li>안내 패널의 <b>응답 버튼</b>(예: "아멘.")을 누르면 다른 신자들에게 말풍선으로 보입니다.</li>
+        <li><b>평화의 인사</b> 순서가 되면 안내 패널에 <b>🕊 평화의 인사 나누기</b> 버튼이 나타납니다. 옆 사람 아바타를 눌러 한 사람씩 인사할 수도 있습니다.</li>
         <li>진행자가 없으면 <b>자동 진행 미사 시작</b>으로 미사를 시작할 수 있습니다.</li>
         <li><b>🔊</b> 버튼에서 배경 오르간·종소리를 켜고 끄며 음량을 조절합니다. 오르간은 입당·봉헌·영성체 때 커지고, 독서·강론·축성 때는 잦아듭니다.</li>
         <li><b>진행자</b> 버튼은 진행자 키를 받은 분만 사용합니다.</li>

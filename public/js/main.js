@@ -9,6 +9,7 @@ import { ChatUI } from './ui/chat.js';
 import { ConfessionUI } from './ui/confession.js';
 import { initAudio, bell, setAmbient, setBellOn, setVolume, setAmbienceLevel, getPrefs, audioState } from './audio.js';
 import { HelpUI } from './ui/help.js';
+import { GreetUI } from './ui/greet.js';
 import { $, toast } from './ui/dom.js';
 
 // ───────── 터치 기기 판별 ─────────
@@ -54,18 +55,21 @@ const net = new Net();
 const chat = new ChatUI(net);
 let selfId = null;
 let isHost = false;
+let selfName = '';
 let followPosture = true;
 let booths = {};
 let myBooth = null;
 
 const massUI = new MassUI(net, massOrder, (step, changed) => {
   world.setLightMode(step?.light || 'normal');
+  $('#btn-peace-step').hidden = step?.id !== 'peace';
   setAmbienceLevel(step?.ambience || 'prelude'); // 미사 전에는 잔잔한 전주
   if (!changed) return;
   if (step?.bell) bell(step.id === 'consecration' ? 3 : 2);
   // 신자석에 있으면 단계 자세를 자동으로 따름
   if (step && followPosture && controls.seat) controls.setPose(step.posture === 'stand' ? 'stand' : step.posture);
   if (step) chat.system(`✝ ${massOrder.parts[step.part]} — ${step.title}`);
+  if (step?.id === 'peace') toast('🕊 평화의 인사를 나눌 시간입니다. 옆 사람 아바타를 눌러 인사해 보십시오.', 4000);
   chat.setSilence(massUI.state.silence, isHost);
 });
 
@@ -80,6 +84,7 @@ const confession = new ConfessionUI(examination, () => {
 
 net.on('welcome', (m) => {
   selfId = m.id;
+  selfName = m.players.find((p) => p.id === m.id)?.name ?? '';
   avatars.clear();
   for (const p of m.players) if (p.id !== selfId) avatars.add(p);
   booths = m.booths;
@@ -164,6 +169,12 @@ chatInput.addEventListener('blur', () => setTimeout(() => {
   if (document.activeElement !== chatInput) document.body.classList.remove('chat-open');
 }, 150));
 
+// 인사(아바타 선택·평화의 인사)
+const greet = new GreetUI({ net, avatars, controls, camera, chat, toast, self: () => ({ id: selfId, name: selfName }) });
+$('#btn-peace').addEventListener('click', () => greet.peaceToAll());
+$('#btn-peace-step').addEventListener('click', () => greet.peaceToAll());
+controls.onKey = (code) => { if (code === 'KeyF') greet.peaceToAll(); };
+
 // 조작 안내
 const help = new HelpUI();
 $('#btn-help').addEventListener('click', () => help.open());
@@ -241,6 +252,8 @@ let lastSent = '';
 const promptEl = $('#prompt');
 const interactBtn = $('#btn-interact');
 let lastBtnText = '';
+let aimAcc = 0;
+let aimed = null; // 마우스 잠금 중 조준점이 가리키는 아바타
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
@@ -254,15 +267,22 @@ renderer.setAnimationLoop(() => {
     const it = nearestInteraction();
     const touch = document.body.classList.contains('touch');
     // 터치 모드에서는 상황 버튼이 안내를 대신하고, '사용 중' 안내만 화면에 표시
-    promptEl.hidden = !it || (touch && it.type !== 'busy');
+    // 마우스 잠금 중: 조준점이 아바타를 가리키면 인사 안내 (0.2초마다 확인)
+    aimAcc += dt;
+    if (aimAcc > 0.2) { aimAcc = 0; aimed = controls.isLocked ? greet.aimed() : null; }
+    const aimLabel = aimed && (aimed.near ? `클릭: ${aimed.name}님에게 인사하기` : `${aimed.name}님 — 가까이 가면 인사할 수 있습니다`);
+    promptEl.hidden = !(it || aimLabel) || (touch && it?.type !== 'busy');
     interactBtn.hidden = !it || it.type === 'busy';
     if (it) promptEl.textContent = it.label;
+    else if (aimLabel) promptEl.textContent = aimLabel;
     const text = it?.btn || '';
     if (text !== lastBtnText) { interactBtn.textContent = text; lastBtnText = text; }
   } else {
     promptEl.hidden = true;
     interactBtn.hidden = true;
   }
+
+  greet.refreshCard();
 
   // 위치 전송(변화가 있을 때만)
   sendAcc += dt;
@@ -276,4 +296,4 @@ renderer.setAnimationLoop(() => {
 });
 
 // 테스트·디버깅용 최소 노출(개인 메모는 포함하지 않음)
-window.__cathedral = { controls, world, avatars, massUI, net, help, audioState };
+window.__cathedral = { controls, world, avatars, massUI, net, help, audioState, greet };
