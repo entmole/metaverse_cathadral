@@ -29,7 +29,7 @@ let chordTimer = null;
 let melodyTimer = null;
 let chordIdx = 0;
 let level = 'prelude';
-let prefs = { ambient: true, bell: true, volume: 0.6 };
+let prefs = { ambient: true, bell: true, volume: 0.8 };
 
 // ───────── 환경설정(브라우저별 편의 저장, 실패해도 기본값으로 동작) ─────────
 try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch { /* 무시 */ }

@@ -69,6 +69,7 @@ const check = (name, cond) => { assert.ok(cond, name); passed++; console.log(`  
     let st = await au();
     check(`입장 후 오디오 재생 상태 (${st.ctx})`, st.ctx === 'running' && st.ambientPlaying);
     check(`미사 단계(인사)에 맞춰 오르간 '잔잔하게' (${st.level})`, st.level === 'soft');
+    check(`기본 음량 80% (${st.prefs.volume})`, st.prefs.volume === 0.8 && (await B.page.textContent('#snd-volume-out')) === '80%');
     await A.page.click('#host-controls [data-act=next]');
     await A.page.click('#host-controls [data-act=next]');
     await wait(400);
